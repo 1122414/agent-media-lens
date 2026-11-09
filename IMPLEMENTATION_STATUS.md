@@ -5,3 +5,5 @@ Public repository, default branch main and Apache-2.0 verified. Phase 0 source i
 Provider authentication and live media acceptance are pending. The repository has no release. See the implementation plan for stage gates.
 
 Phase 1: workspace dependencies locked. Strict build, ESLint and provider tests passed. Native resolution of a real public short link identified a photo note. Live Evil0ctal authorization and video download remain pending. Compose and Colima are now available.
+
+Phase 2: FFmpeg, local CPU base ASR, adaptive sampling, JPEG output and Tesseract ran on generated English and Mandarin tutorial clips. Both identified the spoken instructions and the frame labels. Two pytest tests passed (including no audio), plus Ruff and strict mypy. CUDA and a live platform video remain unverified.

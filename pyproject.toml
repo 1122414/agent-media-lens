@@ -2,7 +2,7 @@
 name = "agent-media-lens-worker"
 version = "0.1.0.dev0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["faster-whisper>=1.2,<2"]
+dependencies = ["faster-whisper>=1.2,<2", "numpy>=2,<3"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.12", "mypy>=1.15"]
