@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { config } from "../../packages/core/config.js";
 import { failure, LensError } from "../../packages/core/contracts.js";
 import { projectRoot } from "../../packages/core/processing.js";
-import { evil, identify } from "../../packages/core/providers.js";
+import { inspectEvil, identify } from "../../packages/core/providers.js";
 import { Lens } from "../../packages/core/service.js";
 import { z } from "zod";
 const cli = new Command()
@@ -56,16 +56,18 @@ cli.command("doctor").action(async () => {
       versions[key] = null;
     }
   }
-  const ready = await evil(c).health();
+  const providerCheck =
+    c.provider === "evil0ctal" ? await inspectEvil(c) : null;
   show({
     node: process.version,
     versions,
-    providerReady: ready,
+    providerReady: providerCheck?.serviceReady ?? null,
+    providerCheck,
     hasProviderKey: Boolean(process.env.EVIL0CTAL_API_KEY),
   });
   if (
     Object.values(versions).includes(null) ||
-    (c.provider === "evil0ctal" && (!ready || !process.env.EVIL0CTAL_API_KEY))
+    (providerCheck !== null && providerCheck.code !== "OK")
   )
     process.exitCode = 1;
 });

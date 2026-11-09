@@ -28,7 +28,7 @@ export PATH="$HOME/.local/bin:$PATH"
 media-lens doctor
 ```
 
-按[采集服务说明](docs/providers/douyin.md)启动独立的 Evil0ctal v5，给本地进程设置 EVIL0CTAL_ENDPOINT 和 EVIL0CTAL_API_KEY。doctor 在缺少服务或密钥时返回退出码 1。可先运行 identify 识别分享链接。
+按[采集服务说明](docs/providers/douyin.md)启动独立的 Evil0ctal v5，给本地进程设置 EVIL0CTAL_ENDPOINT 和 EVIL0CTAL_API_KEY。如果 Evil0ctal 不可达、密钥缺失或无权限，或抖音身份池没有可调度身份，doctor 返回退出码 1。检查通过只说明本机配置可用，具体作品仍需验证下载权限。可先运行 identify 识别分享链接。
 
 ## CLI、插件与容器
 

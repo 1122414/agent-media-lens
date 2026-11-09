@@ -31,7 +31,7 @@ export PATH="$HOME/.local/bin:$PATH"
 media-lens doctor
 ```
 
-Doctor checks local binaries and the configured provider. It exits with status 1 when the service or key is missing. Link identification and existing-task evidence reads work independently.
+Doctor checks local binaries and the configured provider. For Evil0ctal it exits with status 1 if the API is unreachable, the key lacks access, or the Douyin pool has no available identities. An OK check does not establish download permission for a particular video. Link identification and existing-task evidence reads work independently.
 
 ## Providers and configuration
 

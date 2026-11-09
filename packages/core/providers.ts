@@ -3,10 +3,11 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Config } from "./config.js";
 import { LensError, mediaSchema, type Provider } from "./contracts.js";
 import { checked, fetchPublic, share } from "./network.js";
+const providerError = z.object({ code: z.string() });
 const envelope = z.object({
   success: z.boolean(),
   data: z.unknown(),
-  error: z.object({ code: z.string() }).nullable().optional(),
+  error: providerError.nullish(),
 });
 const common = z.object({
   kind: z.string(),
@@ -75,21 +76,120 @@ async function payload(response: Response) {
   }
   return envelope.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
 }
+const publicErrors = new Map([
+  ["IDENTITY_POOL_EXHAUSTED", "采集服务没有可调度的抖音访客身份"],
+  ["IDENTITY_LOGIN_REQUIRED", "作品需要登录；已停止访客采集"],
+  ["UPSTREAM_RISK_CONTROL", "平台限制了访客访问；已停止采集"],
+  ["CONTENT_PRIVATE", "作品非公开；已停止采集"],
+  ["MEDIA_WITHHELD", "平台未提供可下载的媒体"],
+  ["RATE_LIMITED", "服务或平台限流，请稍后再试"],
+  ["NOT_FOUND", "未找到请求的资源"],
+  ["UPSTREAM_UNREACHABLE", "采集服务无法连接平台"],
+]);
+function providerFailure(code: string | undefined, fallback: LensError) {
+  const message = code && publicErrors.get(code);
+  return code && message ? new LensError(code, message) : fallback;
+}
+async function readProvider(
+  url: URL,
+  key: string,
+  signal: AbortSignal,
+  request: typeof fetch,
+) {
+  let response: Response;
+  try {
+    response = await request(url, {
+      headers: { "X-API-Key": key },
+      redirect: "error",
+      signal,
+    });
+  } catch {
+    throw new LensError("PROVIDER_CONNECTION", "服务连接失败或超时");
+  }
+  const refused = new LensError(
+    response.status === 401 || response.status === 403
+      ? "PROVIDER_AUTH"
+      : "PROVIDER_REFUSED",
+    "服务拒绝请求，HTTP " + response.status,
+  );
+  let body;
+  try {
+    body = await payload(response);
+  } catch {
+    if (!response.ok) throw refused;
+    throw new LensError("PROVIDER_PROTOCOL", "无法读取服务响应");
+  }
+  if (!response.ok || !body.success)
+    throw providerFailure(
+      body.error?.code,
+      response.ok
+        ? new LensError("PROVIDER_REFUSED", "服务未能处理请求")
+        : refused,
+    );
+  return { status: response.status, data: body.data };
+}
+async function ready(c: Config, request: typeof fetch) {
+  try {
+    const r = await request(new URL("/readyz", c.endpoint), {
+      redirect: "error",
+      signal: AbortSignal.timeout(3000),
+    });
+    await r.body?.cancel();
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+export async function inspectEvil(c: Config, request = fetch) {
+  const serviceReady = await ready(c, request);
+  const key = process.env.EVIL0CTAL_API_KEY;
+  if (!serviceReady) return { serviceReady, code: "PROVIDER_CONNECTION" };
+  if (!key) return { serviceReady, code: "PROVIDER_KEY_MISSING" };
+  const read = (path: string) =>
+    readProvider(
+      new URL(path, c.endpoint),
+      key,
+      AbortSignal.timeout(5000),
+      request,
+    );
+  try {
+    const me = z
+      .object({
+        user: z.object({
+          via: z.literal("api_key"),
+          scopes: z.array(z.string()),
+        }),
+      })
+      .parse((await read("/api/v1/auth/me")).data);
+    if (!me.user.scopes.some((s) => s === "douyin:read" || s === "admin"))
+      return { serviceReady, code: "PROVIDER_SCOPE" };
+    const count = z.int().nonnegative();
+    const status = z
+      .object({
+        pool: z.object({ douyin: z.object({ active: count }) }),
+        reserved_active: z.object({ douyin: count }),
+      })
+      .parse((await read("/api/v1/system/status")).data);
+    const available = Math.max(
+      0,
+      status.pool.douyin.active - status.reserved_active.douyin,
+    );
+    return {
+      serviceReady,
+      code: available ? "OK" : "IDENTITY_POOL_EXHAUSTED",
+      available,
+    };
+  } catch (error) {
+    return {
+      serviceReady,
+      code: error instanceof LensError ? error.code : "PROVIDER_PROTOCOL",
+    };
+  }
+}
 export function evil(c: Config, request = fetch): Provider {
   return {
     name: "evil0ctal",
-    async health() {
-      try {
-        const r = await request(new URL("/readyz", c.endpoint), {
-          redirect: "error",
-          signal: AbortSignal.timeout(3000),
-        });
-        await r.body?.cancel();
-        return r.ok;
-      } catch {
-        return false;
-      }
-    },
+    health: () => ready(c, request),
     async resolve(input) {
       const source = share(input);
       const key = process.env.EVIL0CTAL_API_KEY;
@@ -103,31 +203,7 @@ export function evil(c: Config, request = fetch): Provider {
         refresh: "true",
         wait: "1",
       }).toString();
-      async function read(u: URL) {
-        let response: Response;
-        try {
-          response = await request(u, {
-            headers: { "X-API-Key": key! },
-            redirect: "error",
-            signal,
-          });
-        } catch {
-          throw new LensError("PROVIDER_CONNECTION", "服务连接失败或超时");
-        }
-        if (!response.ok) {
-          await response.body?.cancel();
-          throw new LensError(
-            response.status === 401 || response.status === 403
-              ? "PROVIDER_AUTH"
-              : "PROVIDER_REFUSED",
-            "服务拒绝请求，HTTP " + response.status,
-          );
-        }
-        const body = await payload(response);
-        if (!body.success)
-          throw new LensError("PROVIDER_REFUSED", "服务未能读取该作品");
-        return { status: response.status, data: body.data };
-      }
+      const read = (u: URL) => readProvider(u, key, signal, request);
       const initial = await read(url);
       if (initial.status === 200) return normalize(initial.data);
       const id = z.object({ task_id: z.uuid() }).parse(initial.data).task_id;
@@ -138,11 +214,15 @@ export function evil(c: Config, request = fetch): Provider {
           .object({
             state: z.enum(["queued", "running", "done", "failed"]),
             data: z.unknown().optional(),
+            error: providerError.nullish(),
           })
           .parse(r.data);
         if (task.state === "done") return normalize(task.data);
         if (task.state === "failed")
-          throw new LensError("PROVIDER_FAILED", "上游任务失败");
+          throw providerFailure(
+            task.error?.code,
+            new LensError("PROVIDER_FAILED", "上游任务失败"),
+          );
       }
       throw new LensError("PROVIDER_TIMEOUT", "上游任务超时");
     },
