@@ -7,3 +7,5 @@ Provider authentication and live media acceptance are pending. The repository ha
 Phase 1: workspace dependencies locked. Strict build, ESLint and provider tests passed. Native resolution of a real public short link identified a photo note. Live Evil0ctal authorization and video download remain pending. Compose and Colima are now available.
 
 Phase 2: FFmpeg, local CPU base ASR, adaptive sampling, JPEG output and Tesseract ran on generated English and Mandarin tutorial clips. Both identified the spoken instructions and the frame labels. Two pytest tests passed (including no audio), plus Ruff and strict mypy. CUDA and a live platform video remain unverified.
+
+Phase 3: SQLite task stages, admission limits, file expiry, interrupted-process recovery and structured artifacts are implemented. Integration checks exercised one real generated MP4 through the worker, returned JPEG bytes, rejected concurrent admission and verified original-only cleanup. TypeScript suite: 14 passed.

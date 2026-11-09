@@ -1,0 +1,170 @@
+import { DatabaseSync } from "node:sqlite";
+import { randomUUID } from "node:crypto";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import type { Config } from "./config.js";
+import { LensError, type Stage } from "./contracts.js";
+const terminal = ["COMPLETED", "FAILED", "CANCELLED"];
+type Timing = { stage: Stage; startedAt: string; elapsedMs?: number };
+export interface Task {
+  taskId: string;
+  status: Stage;
+  createdAt: string;
+  completedAt?: string;
+  stages: Timing[];
+  retries: number;
+  error?: { code: string; message: string };
+  artifacts?: Record<string, string>;
+}
+export class Store {
+  readonly db: DatabaseSync;
+  readonly root: string;
+  constructor(readonly settings: Config) {
+    mkdirSync(settings.cacheDir, { recursive: true, mode: 0o700 });
+    this.root = realpathSync(settings.cacheDir);
+    const dbPath = join(this.root, "tasks.sqlite");
+    if (existsSync(dbPath) && lstatSync(dbPath).isSymbolicLink())
+      throw new LensError("UNSAFE_PATH", "数据库路径无效");
+    this.db = new DatabaseSync(dbPath);
+    this.db.exec(
+      "PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY,pid INTEGER NOT NULL,active INTEGER NOT NULL,body TEXT NOT NULL);",
+    );
+    this.transaction(() => {
+      for (const row of this.db
+        .prepare("SELECT id,pid FROM tasks WHERE active=1")
+        .all()) {
+        try {
+          process.kill(Number(row.pid), 0);
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === "ESRCH")
+            this.stage(String(row.id), "FAILED", {
+              error: { code: "INTERRUPTED", message: "处理进程已退出" },
+            });
+        }
+      }
+    });
+  }
+  transaction<T>(fn: () => T) {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const value = fn();
+      this.db.exec("COMMIT");
+      return value;
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+  dir(id: string) {
+    z.uuid().parse(id);
+    const p = join(this.root, id);
+    if (existsSync(p) && realpathSync(p) !== p)
+      throw new LensError("UNSAFE_PATH", "任务目录不是安全路径");
+    return p;
+  }
+  file(id: string, name: string) {
+    if (
+      !/^(source\.mp4|audio\.wav|evidence\.json|result\.json|transcript\.json|analysis\.md|f\d{3}\.jpg)$/.test(
+        name,
+      )
+    )
+      throw new LensError("UNSAFE_PATH", "文件名无效");
+    const p = join(this.dir(id), name);
+    if (existsSync(p) && !lstatSync(p).isFile())
+      throw new LensError("UNSAFE_PATH", "任务文件无效");
+    return p;
+  }
+  task(id: string): Task {
+    z.uuid().parse(id);
+    const row = this.db.prepare("SELECT body FROM tasks WHERE id=?").get(id);
+    if (!row) throw new LensError("NOT_FOUND", "任务不存在");
+    return JSON.parse(String(row.body));
+  }
+  cleanup() {
+    return this.transaction(() => {
+      let removed = 0;
+      for (const row of this.db
+        .prepare("SELECT id FROM tasks WHERE active=0")
+        .all()) {
+        const path = this.file(String(row.id), "source.mp4");
+        if (
+          existsSync(path) &&
+          statSync(path).mtimeMs <=
+            Date.now() - this.settings.retentionDays * 86400000
+        ) {
+          unlinkSync(path);
+          removed++;
+        }
+      }
+      return { removed };
+    });
+  }
+  create() {
+    this.cleanup();
+    return this.transaction(() => {
+      const active = Number(
+        this.db.prepare("SELECT count(*) AS n FROM tasks WHERE active=1").get()
+          ?.n,
+      );
+      if (active >= this.settings.concurrency)
+        throw new LensError("BUSY", "并发任务已满");
+      let used = 0;
+      for (const row of this.db.prepare("SELECT id FROM tasks").all()) {
+        const dir = this.dir(String(row.id));
+        if (existsSync(dir))
+          for (const f of readdirSync(dir))
+            used += lstatSync(join(dir, f)).size;
+      }
+      const reserve =
+        this.settings.maxBytes +
+        this.settings.maxFrames * 512000 +
+        this.settings.maxSeconds * 32000 +
+        8000000;
+      if (used + reserve * (active + 1) > this.settings.maxDiskBytes)
+        throw new LensError("DISK_LIMIT", "缓存空间不足");
+      const id = randomUUID(),
+        createdAt = new Date().toISOString();
+      const task: Task = {
+        taskId: id,
+        createdAt,
+        status: "PENDING",
+        stages: [{ stage: "PENDING", startedAt: createdAt }],
+        retries: 0,
+      };
+      mkdirSync(this.dir(id), { mode: 0o700 });
+      this.db
+        .prepare("INSERT INTO tasks VALUES(?,?,1,?)")
+        .run(id, process.pid, JSON.stringify(task));
+      return task;
+    });
+  }
+  stage(
+    id: string,
+    status: Stage,
+    extra: Partial<Pick<Task, "error" | "artifacts">> = {},
+  ) {
+    const task = this.task(id);
+    if (terminal.includes(task.status)) return task;
+    const now = new Date().toISOString();
+    const last = task.stages.at(-1)!;
+    last.elapsedMs = Date.parse(now) - Date.parse(last.startedAt);
+    task.stages.push({ stage: status, startedAt: now });
+    task.status = status;
+    Object.assign(task, extra);
+    const done = terminal.includes(status);
+    if (done) task.completedAt = now;
+    this.db
+      .prepare("UPDATE tasks SET body=?,active=? WHERE id=?")
+      .run(JSON.stringify(task), done ? 0 : 1, id);
+    return task;
+  }
+}
