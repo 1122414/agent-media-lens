@@ -13,6 +13,19 @@ flowchart LR
  OCR --> 证据 --> MCP --> Agent --> Markdown
 ```
 
+## 读取作者主页
+
+把 B 站空间或抖音用户主页链接发给插件，或运行以下命令。目录查询无需打开浏览器或下载视频。
+
+```sh
+media-lens profile "$PROFILE_URL" --count 5
+media-lens profile "$PROFILE_URL" --view posts --count 5 --cursor "$NEXT_CURSOR"
+media-lens profile "$PROFILE_URL" --view collections
+media-lens profile "$PROFILE_URL" --view collection --collection-id "$COLLECTION_ID"
+```
+
+每条记录包含作者、作品链接、标题、发布时刻、时长和公开互动数。点赞、播放、评论、收藏或分享未公开时显示 null。默认补查缺失点赞的作品详情，可加 `--list-only` 只读目录。返回 `view=collection` 表示作品来自指定合集，`postListError` 会说明投稿列表是否受限。抖音访客有时只能读取第一页。
+
 ## 安装
 
 准备 Node 24.12+（24.x）、pnpm 11.5、Python 3.12、uv、FFmpeg、ffprobe 和 Tesseract。OCR 需要 chi_sim 与 eng 语言包。第一次转写会按需下载模型，可提前准备缓存。

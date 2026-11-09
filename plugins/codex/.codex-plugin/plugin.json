@@ -1,6 +1,6 @@
 {
   "name": "agent-media-lens",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Understand public Douyin videos, photo albums and Bilibili videos locally using timestamped speech, OCR and on-demand frames.",
   "author": {
     "name": "AgentMediaLens contributors"

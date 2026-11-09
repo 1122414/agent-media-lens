@@ -9,3 +9,5 @@
 [Album media lives on each page](patterns/album-pages.md) applies when an image album has a post-level video or duration. Verified on a three-page live album and in provider tests.
 
 [Match a Bilibili player to a part](patterns/bilibili-parts.md) applies to shares with a page query and multi-part post durations. Verified with a 13-part public upload and covered with isolated mismatch, preview and segmented-media tests.
+
+[Author feed coverage and missing metrics](patterns/author-feed-coverage.md) applies when a public video is readable but the creator feed stops or omits likes. Verified for Bilibili with an independently published collection directory; Douyin guest upload refusal was observed.

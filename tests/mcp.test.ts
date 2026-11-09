@@ -56,7 +56,9 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
         stderr: "ignore",
       }),
     );
-    expect((await client.listTools()).tools.length).toBe(10);
+    const toolNames = (await client.listTools()).tools.map((t) => t.name);
+    expect(toolNames).toHaveLength(11);
+    expect(toolNames).toContain("media_list_profile");
     const call = (name: string, args: Record<string, unknown>) =>
       client.callTool({ name, arguments: args });
     const a = { taskId: job.taskId };

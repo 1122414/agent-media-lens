@@ -6,10 +6,11 @@ import { writeFileSync } from "node:fs";
 import { config } from "../../packages/core/config.js";
 import { failure, LensError } from "../../packages/core/contracts.js";
 import { Lens } from "../../packages/core/service.js";
+import { listProfile, profileOptions } from "../../packages/core/profile.js";
 const lens = new Lens(config());
 const server = new McpServer({
   name: "agent-media-lens",
-  version: "0.3.0",
+  version: "0.4.0",
 });
 const taskId = z.uuid(),
   url = z.string().min(1).max(4096),
@@ -42,6 +43,18 @@ async function call<T>(name: string, fn: () => T | Promise<T>) {
     return { ...json({ error }), isError: true };
   }
 }
+server.registerTool(
+  "media_list_profile",
+  {
+    description:
+      "Read one public creator profile without a browser. Return posts, canonical URLs, engagement metrics and independently published collections. Check view, postListError and cursors to establish coverage.",
+    inputSchema: z.object({ url, ...profileOptions.shape }),
+  },
+  ({ url, ...options }) =>
+    call("list_profile", async () =>
+      json(await listProfile(lens.settings, url, options)),
+    ),
+);
 server.registerTool(
   "media_resolve",
   {

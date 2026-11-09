@@ -186,7 +186,7 @@ it.each([
   async (kind, code) => {
     vi.stubEnv(
       "EVIL0CTAL_API_KEY",
-      kind === "missing" ? undefined : "test-only",
+      kind === "missing" ? "" : "test-only",
     );
     const request = vi
       .fn<typeof fetch>()

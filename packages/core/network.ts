@@ -22,9 +22,20 @@ const biliPages = [
 ];
 export const biliPath =
   /^\/video\/(BV1[1-9A-HJ-NP-Za-km-z]{9}|av[1-9]\d{0,15})\/?$/;
-type UrlKind = "page" | "bili-page" | "stream" | "bili-stream" | "photo";
+type UrlKind =
+  | "bili-profile"
+  | "dy-profile"
+  | "page"
+  | "bili-page"
+  | "stream"
+  | "bili-stream"
+  | "photo";
 function allowedHost(host: string, kind: UrlKind, redirectedFrom?: URL) {
   switch (kind) {
+    case "bili-profile":
+      return biliPages.includes(host) || host === "space.bilibili.com";
+    case "dy-profile":
+      return pages.includes(host);
     case "page":
       return pages.includes(host);
     case "bili-page":
@@ -149,6 +160,9 @@ export async function fetchPublic(
       res.destroy();
       url = checked(new URL(res.headers.location, url).href, kind, url);
       if (
+        (kind === "bili-profile" &&
+          ["space.bilibili.com", "m.bilibili.com"].includes(url.hostname)) ||
+        (kind === "dy-profile" && /^\/(?:share\/)?user\//.test(url.pathname)) ||
         (kind === "bili-page" &&
           url.hostname !== "b23.tv" &&
           biliPath.test(url.pathname)) ||

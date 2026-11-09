@@ -24,3 +24,13 @@ Task and result queries expose a current `sourcePath` for a retained platform do
 Album results use schema 1.1. Existing video results in 1.0 remain readable. Albums expose one-based pages, their still/live type and a null overall duration. Each frame and OCR row carries a page. Timestamp is null on a poster and page-local seconds on motion. A timestamp selector requires a page on an album. The same maxFrames and total input byte limits apply to the whole album. Photo decoding accepts JPEG, PNG and WebP; source images and clips are temporary.
 
 Bilibili video results also use schema 1.1. Media includes the canonical BV identifier, platform `bilibili` and `part` with a one-based number, total and title. Duration, transcript and frames refer to the selected part. The canonical URL retains `?p=N` for later parts and omits tracking parameters. The rendition is `public_playback` when a supported stream is available.
+
+### Author profiles
+
+`media_list_profile` and `media-lens profile` return one page. The default `overview` asks for the author's own public uploads and collection directory. When uploads are refused but a collection is available, the response identifies the first collection by ID, sets `view=collection` and reports the uploads error. An empty collection directory alongside a refused feed leaves the upload count unknown.
+
+Use `view=posts` for uploads, `view=collections` to enumerate collection IDs, and `view=collection` with `collectionId` for one collection's posts by the specified author. For posts pass `nextCursor`. For the collection directory pass `collectionCursor`. Preserve the view, owner, collection and count (1–20) across pages. Bilibili returns a season as one upstream unit, which the client pages locally.
+
+Counts include likes, views, comments, favorites and shares. A zero is distinct from an unknown count (null). When the list omits likes, detail enrichment can issue one metadata request per returned row; `details: false` or `--list-only` disables it. `statsAt` is the timestamp from the stats-bearing response. In a mixed response individual metrics may be retained from the earlier list. `statsError` reports a failed detail query. No media is downloaded to list a profile.
+
+The CLI and MCP normally read EVIL0CTAL_API_KEY from their environment. A locally provisioned installation using exactly http://127.0.0.1:8000 can also read the checkout's ignored `.cache/provider/platform-reader.env` (single EVIL0CTAL_API_KEY assignment). It must be an owner-only regular file, owned by the current user. A remote or alternate-port provider requires an explicit environment key.

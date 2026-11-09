@@ -3,12 +3,13 @@ import { Command } from "commander";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { config } from "../../packages/core/config.js";
+import { config, providerKey } from "../../packages/core/config.js";
 import { failure, LensError } from "../../packages/core/contracts.js";
 import { projectRoot } from "../../packages/core/processing.js";
 import { inspectEvil, identify } from "../../packages/core/providers.js";
 import { Lens } from "../../packages/core/service.js";
 import { z } from "zod";
+import { listProfile } from "../../packages/core/profile.js";
 const cli = new Command()
   .name("media-lens")
   .description("理解公开抖音作品和 B 站视频，读取本地证据")
@@ -71,7 +72,7 @@ cli
       versions,
       providerReady: providerCheck?.serviceReady ?? null,
       providerCheck,
-      hasProviderKey: Boolean(process.env.EVIL0CTAL_API_KEY),
+      hasProviderKey: Boolean(providerKey(c)),
     });
     if (
       Object.values(versions).includes(null) ||
@@ -79,6 +80,29 @@ cli
     )
       process.exitCode = 1;
   });
+cli
+  .command("profile <url>")
+  .description("读取作者公开作品与统计，可分页浏览投稿或合集")
+  .option(
+    "--view <kind>",
+    "overview、posts、collections 或 collection",
+    "overview",
+  )
+  .option("--collection-id <id>", "要读取的作者合集编号")
+  .option("--cursor <cursor>", "上次返回的分页游标")
+  .option("--count <n>", "每页条数（1–20）", Number, 5)
+  .option("--list-only", "仅使用目录统计，跳过缺失点赞数的详情查询")
+  .action(async (url, o) =>
+    show(
+      await listProfile(config(), url, {
+        view: o.view,
+        collectionId: o.collectionId,
+        cursor: o.cursor,
+        count: o.count,
+        details: !o.listOnly,
+      }),
+    ),
+  );
 cli.command("identify <url>").action(async (url) => show(await identify(url)));
 cli
   .command("resolve <url>")

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Browse public Bilibili and Douyin creator uploads and collections with the CLI and MCP, including canonical links and available engagement metrics.
+
 - Analyze Douyin image albums by page, with still posters and paired motion frames for Live Photos.
 - Analyze public Bilibili BV, av and short video links, keep the requested part and report guest playback availability.
 

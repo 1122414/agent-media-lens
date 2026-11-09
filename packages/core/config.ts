@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { readFileSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readFileSync,
+} from "node:fs";
+import { projectRoot } from "./processing.js";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { LensError } from "./contracts.js";
@@ -57,4 +64,44 @@ export function config(): Config {
     throw new LensError("CONFIG", "Provider 需要 HTTPS 或本机回环地址");
   c.cacheDir = resolve(c.cacheDir);
   return c;
+}
+
+// Desktop MCP clients may start outside the shell that configured the provider.
+// Bind the checkout's private reader file to its original loopback service.
+export function providerKey(
+  c: Config,
+  path = join(projectRoot, ".cache", "provider", "platform-reader.env"),
+) {
+  if (process.env.EVIL0CTAL_API_KEY !== undefined)
+    return process.env.EVIL0CTAL_API_KEY;
+  if (new URL(c.endpoint).origin !== "http://127.0.0.1:8000" || !process.getuid)
+    return undefined;
+  let fd;
+  try {
+    fd = openSync(
+      path,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+    const st = fstatSync(fd);
+    if (
+      !st.isFile() ||
+      st.uid !== process.getuid() ||
+      (st.mode & 0o077) !== 0 ||
+      st.size > 1024
+    )
+      throw new LensError(
+        "PROVIDER_AUTH",
+        "本机只读凭证需要当前用户持有并设为 0600",
+      );
+    const value = /^EVIL0CTAL_API_KEY=([A-Za-z0-9_.-]+)$/.exec(
+      readFileSync(fd, "utf8").trim(),
+    )?.[1];
+    if (!value) throw new LensError("PROVIDER_AUTH", "本机只读凭证格式无效");
+    return value;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw new LensError("PROVIDER_AUTH", "请检查本机只读凭证格式与权限");
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
 }
