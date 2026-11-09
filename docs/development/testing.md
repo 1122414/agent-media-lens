@@ -1,6 +1,6 @@
 # Verification
 
-Run pnpm build, pnpm lint, pnpm test, uv run ruff check workers tests/test_worker.py, uv run mypy workers, uv run pytest -q tests/test_worker.py, and node scripts/check-plugin.mjs. Build before testing because the stdio test launches the compiled entry point.
+Run pnpm build, pnpm lint, pnpm test, uv run ruff check workers scripts/douyin-login.py tests, uv run mypy workers, uv run pytest -q tests, and node scripts/check-plugin.mjs. Build before testing because the stdio test launches the compiled entry point.
 
 Provider fixtures cover URL validation, explicit public/download permission, v5 task polling and image album rejection. The generated FFmpeg clip tests exercise real decoding, frames, OCR, task storage, MCP image bytes and CLI reads without a provider identity. The suite injects a fixture at the acquisition boundary.
 

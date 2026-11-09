@@ -10,7 +10,7 @@ import { listProfile, profileOptions } from "../../packages/core/profile.js";
 const lens = new Lens(config());
 const server = new McpServer({
   name: "agent-media-lens",
-  version: "0.4.0",
+  version: "0.5.0",
 });
 const taskId = z.uuid(),
   url = z.string().min(1).max(4096),
@@ -47,7 +47,7 @@ server.registerTool(
   "media_list_profile",
   {
     description:
-      "Read one public creator profile without a browser. Return posts, canonical URLs, engagement metrics and independently published collections. Check view, postListError, guestLimited and cursors. A guest-limited Douyin page can omit recent posts even when empty.",
+      "Read one public creator profile without a browser. Return posts, canonical URLs, engagement metrics and independently published collections. Check view, postListError, guestLimited and cursors. A guest-limited Douyin page can omit recent posts even when empty. Only when the user requests their configured local login, use auth=local-login for Douyin uploads and keep it on subsequent cursor requests.",
     inputSchema: z.object({ url, ...profileOptions.shape }),
   },
   ({ url, ...options }) =>

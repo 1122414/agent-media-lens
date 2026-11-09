@@ -76,6 +76,14 @@ export function providerKey(
     return process.env.EVIL0CTAL_API_KEY;
   if (new URL(c.endpoint).origin !== "http://127.0.0.1:8000" || !process.getuid)
     return undefined;
+  const raw = privateSetting(path);
+  if (raw === undefined) return undefined;
+  const value = /^EVIL0CTAL_API_KEY=([A-Za-z0-9_.-]+)$/.exec(raw)?.[1];
+  if (!value) throw new LensError("PROVIDER_AUTH", "本机只读凭证格式无效");
+  return value;
+}
+
+function privateSetting(path: string) {
   let fd;
   try {
     fd = openSync(
@@ -85,7 +93,7 @@ export function providerKey(
     const st = fstatSync(fd);
     if (
       !st.isFile() ||
-      st.uid !== process.getuid() ||
+      st.uid !== process.getuid?.() ||
       (st.mode & 0o077) !== 0 ||
       st.size > 1024
     )
@@ -93,15 +101,59 @@ export function providerKey(
         "PROVIDER_AUTH",
         "本机只读凭证需要当前用户持有并设为 0600",
       );
-    const value = /^EVIL0CTAL_API_KEY=([A-Za-z0-9_.-]+)$/.exec(
-      readFileSync(fd, "utf8").trim(),
-    )?.[1];
-    if (!value) throw new LensError("PROVIDER_AUTH", "本机只读凭证格式无效");
-    return value;
+    return readFileSync(fd, "utf8").trim();
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw new LensError("PROVIDER_AUTH", "请检查本机只读凭证格式与权限");
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
+}
+
+const loginOrigin = "http://127.0.0.1:8000";
+export function douyinLogin(
+  c: Config,
+  path = join(projectRoot, ".cache", "provider", "douyin-login.json"),
+) {
+  if (new URL(c.endpoint).href !== loginOrigin + "/")
+    throw new LensError(
+      "LOCAL_LOGIN_ENDPOINT",
+      "本机登录仅支持 127.0.0.1:8000",
+    );
+  const proxyOptIn =
+    process.env.NODE_USE_ENV_PROXY === "1" ||
+    process.execArgv.includes("--use-env-proxy") ||
+    /(?:^|\s)--use-env-proxy(?:\s|$)/.test(process.env.NODE_OPTIONS ?? "");
+  if (
+    proxyOptIn &&
+    !(process.env.no_proxy ?? process.env.NO_PROXY ?? "")
+      .split(",")
+      .some((s) => ["*", "127.0.0.1", "127.0.0.1:8000"].includes(s.trim()))
+  )
+    throw new LensError(
+      "LOCAL_LOGIN_PROXY",
+      "请在 NO_PROXY 中加入 127.0.0.1，再使用本机登录",
+    );
+  const raw = privateSetting(path);
+  if (!raw) throw loginNeeded();
+  try {
+    const settings = z
+      .object({
+        apiKey: z.string().regex(/^[A-Za-z0-9_.-]{8,256}$/),
+        identityId: z.uuid().nullable(),
+      })
+      .parse(JSON.parse(raw));
+    if (settings.identityId)
+      return { ...settings, identityId: settings.identityId };
+  } catch {
+    throw new LensError("LOCAL_LOGIN_CONFIG", "本机登录配置无效；请重新配置");
+  }
+  throw loginNeeded();
+}
+
+export function loginNeeded() {
+  return new LensError(
+    "LOCAL_LOGIN_REQUIRED",
+    "请在自己的终端运行 media-lens douyin-login 完成本机登录；无需把 Cookie 发给 Agent",
+  );
 }

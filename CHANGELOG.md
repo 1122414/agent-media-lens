@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Read two or more public Douyin upload pages with an explicitly selected, reserved local login when the platform permits paging. Guest access remains the default.
+
 - Browse public Bilibili and Douyin creator uploads and collections with the CLI and MCP, including canonical links and available engagement metrics.
 
 - Analyze Douyin image albums by page, with still posters and paired motion frames for Live Photos.

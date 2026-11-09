@@ -81,6 +81,24 @@ cli
       process.exitCode = 1;
   });
 cli
+  .command("douyin-login")
+  .description("在本机终端配置只用于抖音公开投稿的登录身份")
+  .option("--clipboard", "Mac：确认后从剪贴板读取一次 Cookie，避免终端长行限制")
+  .action((opts) => {
+    try {
+      execFileSync(
+        "python3",
+        [
+          join(projectRoot, "scripts", "douyin-login.py"),
+          ...(opts.clipboard ? ["--clipboard"] : []),
+        ],
+        { stdio: "inherit" },
+      );
+    } catch {
+      process.exitCode = 1;
+    }
+  });
+cli
   .command("profile <url>")
   .description("读取作者公开作品与统计，可分页浏览投稿或合集")
   .option(
@@ -88,6 +106,7 @@ cli
     "overview、posts、collections 或 collection",
     "overview",
   )
+  .option("--local-login", "仅此次抖音投稿查询使用本机登录身份")
   .option("--collection-id <id>", "要读取的作者合集编号")
   .option("--cursor <cursor>", "上次返回的分页游标")
   .option("--count <n>", "每页条数（1–20）", Number, 5)
@@ -96,6 +115,7 @@ cli
     show(
       await listProfile(config(), url, {
         view: o.view,
+        auth: o.localLogin ? "local-login" : "guest",
         collectionId: o.collectionId,
         cursor: o.cursor,
         count: o.count,

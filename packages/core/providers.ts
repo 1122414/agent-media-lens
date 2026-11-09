@@ -1,12 +1,21 @@
 import { z } from "zod";
 import { setTimeout as delay } from "node:timers/promises";
-import { providerKey, type Config } from "./config.js";
+import {
+  douyinLogin,
+  loginNeeded,
+  providerKey,
+  type Config,
+} from "./config.js";
 import { LensError, mediaSchema, type Provider } from "./contracts.js";
 import { normalizeBilibili } from "./bilibili.js";
 import { biliPath, checked, fetchPublic, share } from "./network.js";
 const providerError = z.object({ code: z.string() });
 const resultMeta = z
-  .object({ guest_fallback: z.boolean().optional() })
+  .object({
+    guest_fallback: z.boolean().optional(),
+    identity_id: z.string().nullish(),
+    cached: z.boolean().optional(),
+  })
   .nullish();
 const envelope = z.object({
   success: z.boolean(),
@@ -130,7 +139,7 @@ export function normalize(
     stream: selected ? checked(selected, "stream").href : null,
   };
 }
-async function payload(response: Response) {
+async function payload(response: Response, limit: number) {
   const reader = response.body?.getReader();
   if (!reader) throw new LensError("PROVIDER_PROTOCOL", "服务响应为空");
   const chunks: Uint8Array[] = [];
@@ -139,7 +148,7 @@ async function payload(response: Response) {
     const { done, value } = await reader.read();
     if (done) break;
     n += value.length;
-    if (n > 2000000) {
+    if (n > limit) {
       await reader.cancel();
       throw new LensError("PROVIDER_PROTOCOL", "服务响应超限");
     }
@@ -148,9 +157,9 @@ async function payload(response: Response) {
   return envelope.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
 }
 const publicErrors = new Map([
-  ["IDENTITY_POOL_EXHAUSTED", "采集服务没有可调度的平台访客身份"],
+  ["IDENTITY_POOL_EXHAUSTED", "采集服务没有可调度的平台身份"],
   ["IDENTITY_LOGIN_REQUIRED", "作品需要登录；已停止访客采集"],
-  ["UPSTREAM_RISK_CONTROL", "平台限制了访客访问；已停止采集"],
+  ["UPSTREAM_RISK_CONTROL", "平台限制了本次访问；已停止采集"],
   ["CONTENT_PRIVATE", "作品非公开；已停止采集"],
   ["MEDIA_WITHHELD", "平台未提供可下载的媒体"],
   ["RATE_LIMITED", "服务或平台限流，请稍后再试"],
@@ -167,6 +176,7 @@ async function readProvider(
   key: string,
   signal: AbortSignal,
   request: typeof fetch,
+  limit = 2_000_000,
 ) {
   let response: Response;
   try {
@@ -186,7 +196,7 @@ async function readProvider(
   );
   let body;
   try {
-    body = await payload(response);
+    body = await payload(response, limit);
   } catch {
     if (!response.ok) throw refused;
     throw new LensError("PROVIDER_PROTOCOL", "无法读取服务响应");
@@ -201,7 +211,7 @@ async function readProvider(
   return {
     status: response.status,
     data: body.data,
-    guestFallback: body.meta?.guest_fallback === true,
+    meta: body.meta,
   };
 }
 async function ready(c: Config, request: typeof fetch) {
@@ -272,21 +282,118 @@ export async function queryProviderResult(
   operation: "video" | "user/posts" | "user/mixes" | "mix/posts",
   params: Record<string, string>,
   request = fetch,
+  auth: "guest" | "local-login" = "guest",
 ) {
-  const key = providerKey(c);
+  if (
+    auth === "local-login" &&
+    (platform !== "douyin" || operation !== "user/posts")
+  )
+    throw new LensError(
+      "LOCAL_LOGIN_SCOPE",
+      "本机登录仅用于抖音作者的公开投稿",
+    );
+  if (auth === "local-login")
+    z.strictObject({
+      sec_user_id: z.string().regex(/^MS4wLj[A-Za-z0-9_-]{10,180}$/),
+      count: z
+        .string()
+        .regex(/^(?:[1-9]|1[0-9]|20)$/)
+        .optional(),
+      cursor: z
+        .string()
+        .regex(/^\d{1,24}$/)
+        .optional(),
+    }).parse(params);
+  const login = auth === "local-login" ? douyinLogin(c) : undefined;
+  const key = login?.apiKey ?? providerKey(c);
   if (!key)
     throw new LensError("PROVIDER_AUTH", "请在本机配置 EVIL0CTAL_API_KEY");
   const signal = AbortSignal.timeout(45000);
   const url = new URL("/api/v1/" + platform + "/" + operation, c.endpoint);
-  url.search = new URLSearchParams({ ...params, wait: "1" }).toString();
-  const read = (u: URL) => readProvider(u, key, signal, request);
-  const initial = await read(url);
-  if (initial.status === 200)
-    return { data: initial.data, guestFallback: initial.guestFallback };
+  url.search = new URLSearchParams({
+    ...params,
+    ...(login && { identity: login.identityId, include_raw: "true" }),
+    wait: "1",
+  }).toString();
+  const read = (u: URL) =>
+    readProvider(u, key, signal, request, login ? 8_000_000 : undefined);
+  if (login) {
+    const inventory = new URL("/api/v1/admin/identities", c.endpoint);
+    inventory.search = new URLSearchParams({
+      platform: "douyin",
+      identity_id: login.identityId,
+      authenticated: "true",
+      rotation: "reserved",
+      limit: "1",
+    }).toString();
+    const records = z
+      .array(
+        z.object({
+          id: z.uuid(),
+          platform: z.string(),
+          authenticated: z.boolean(),
+          state: z.string(),
+          rotation_endpoints: z.array(z.string()).nullable(),
+          expires_at: z.iso.datetime({ offset: true }).nullable(),
+          cooldown_until: z.iso.datetime({ offset: true }).nullable(),
+          session: z.object({ verdict: z.string() }),
+        }),
+      )
+      .parse((await read(inventory)).data);
+    const row = records[0];
+    if (
+      !row ||
+      row.id !== login.identityId ||
+      row.platform !== "douyin" ||
+      !row.authenticated ||
+      row.rotation_endpoints?.length !== 0 ||
+      row.state === "retired" ||
+      row.session.verdict !== "ok" ||
+      (row.expires_at && Date.parse(row.expires_at) <= Date.now())
+    )
+      throw loginNeeded();
+    if (
+      (row.state === "cooling" || row.state === "degraded") &&
+      row.cooldown_until &&
+      Date.parse(row.cooldown_until) > Date.now()
+    )
+      throw new LensError(
+        "LOCAL_LOGIN_COOLING",
+        "本机登录身份正在冷却，稍后再试",
+      );
+  }
+  const finish = (data: unknown, meta: z.infer<typeof resultMeta>) => {
+    if (
+      login &&
+      (meta?.identity_id !== login.identityId ||
+        meta?.cached !== false ||
+        meta?.guest_fallback === true)
+    )
+      throw new LensError(
+        "LOCAL_LOGIN_UNCONFIRMED",
+        "服务未确认所选登录身份的实时响应",
+      );
+    return { data, guestFallback: meta?.guest_fallback === true };
+  };
+  const checkedRead = async (u: URL) => {
+    try {
+      return await read(u);
+    } catch (e) {
+      if (
+        login &&
+        e instanceof LensError &&
+        e.code === "IDENTITY_LOGIN_REQUIRED"
+      )
+        throw loginNeeded();
+      throw e;
+    }
+  };
+  const initial = await checkedRead(url);
+  if (initial.status === 200) return finish(initial.data, initial.meta);
   const id = z.object({ task_id: z.uuid() }).parse(initial.data).task_id;
   for (let i = 0; i < 40; i++) {
     await delay(750, undefined, { signal });
-    const r = await read(new URL("/api/v1/tasks/" + id, c.endpoint));
+    const r = await checkedRead(new URL("/api/v1/tasks/" + id, c.endpoint));
     const task = z
       .object({
         state: z.enum(["queued", "running", "done", "failed"]),
@@ -295,11 +402,13 @@ export async function queryProviderResult(
         result_meta: resultMeta,
       })
       .parse(r.data);
-    if (task.state === "done")
-      return {
-        data: task.data,
-        guestFallback: task.result_meta?.guest_fallback === true,
-      };
+    if (task.state === "done") return finish(task.data, task.result_meta);
+    if (
+      login &&
+      task.state === "failed" &&
+      task.error?.code === "IDENTITY_LOGIN_REQUIRED"
+    )
+      throw loginNeeded();
     if (task.state === "failed")
       throw providerFailure(
         task.error?.code,

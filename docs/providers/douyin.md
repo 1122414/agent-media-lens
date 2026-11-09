@@ -1,6 +1,6 @@
 # Douyin v5 provider
 
-Use an operator-controlled Evil0ctal instance serving **guest-only public content**. Install the default upstream services on loopback. AgentMediaLens transfers and transcribes media locally. The upstream browser profile is optional when a guest identity already contains the platform-issued visitor ID required for native signing of Douyin post details. Deployment contains Redis and PostgreSQL solely for the external provider.
+Use an operator-controlled Evil0ctal instance serving **public content with guests by default**. Install the default upstream services on loopback. AgentMediaLens transfers and transcribes media locally. The upstream browser profile is optional when a guest identity already contains the platform-issued visitor ID required for native signing of Douyin post details. Deployment contains Redis and PostgreSQL solely for the external provider.
 
 ```sh
 sh providers/douyin/bootstrap.sh
@@ -19,7 +19,7 @@ For each canonical video, the adapter calls GET /api/v1/douyin/video, requests i
 
 `media-lens identify "$SHARE_URL"` is the least expensive test. Then resolve the same URL and verify metadata before analyzing. Configure the key in the local process environment. The native provider returns a specific unsupported error where acquisition is unavailable.
 
-With the Evil0ctal provider selected, `media-lens doctor` checks three things in order: service readiness, the API key's Douyin permission, and non-reserved active Douyin identities. The status API provides counts, not the type of each identity: the operator must keep the instance guest-only. An OK result is a snapshot, not proof that a platform request will succeed.
+With the Evil0ctal provider selected, `media-lens doctor` checks three things in order: service readiness, the API key's Douyin permission, and non-reserved active Douyin identities. The status API provides counts, not the type of each identity: keep all rotating identities guest-only. An OK result is a snapshot, not proof that a platform request will succeed.
 
 | Result | What to do |
 |---|---|
@@ -31,3 +31,11 @@ With the Evil0ctal provider selected, `media-lens doctor` checks three things in
 The same recognized refusal is reported whether the v5 API answers immediately or queues a task. The upstream message, details, raw response and signed media URLs are never copied into that error.
 
 For photo notes and slides, the same detail endpoint returns an image_album. Validate the public status and each ordered page. Download the poster using the Douyin signed-photo CDN policy and any page-level live clip through the existing video CDN policy. The post-level video may be background music. JPEG, PNG and WebP posters are decoded as still images, and the raw pages are deleted after processing.
+
+## Optional local login for public uploads
+
+On a single-user deployment bound to `http://127.0.0.1:8000`, create a separate key in the provider console with precisely `douyin:read` and `identity:manage`, as an operator or admin. Upstream requires the latter to pin an identity; it can also manage credentials, so never give it to a remote caller or set it as the ordinary reader key. Keep the normal pool guest-only. In a local terminal run `media-lens douyin-login` and supply the key when prompted. On macOS `--clipboard` reads the copied Cookie header once after you press Enter; the other option uses hidden terminal input. Sign in at Douyin yourself and use only that site's Cookie and matching User-Agent. The helper rejects redirects and sends the import only to loopback. Never provide these values to an agent.
+
+The helper imports a **reserved** identity and writes only the dedicated key, identity ID and reported expiry into an owner-only ignored file. Each explicit `--local-login` / `auth: "local-login"` request checks reservation, session quality and expiry locally, pins only `douyin/user/posts`, and requires the same identity in the upstream receipt with caching off. It never turns a guest call into a login call after a refusal. Missing account visibility in a signed-in list requires independent public guest detail verification, including with `--list-only`. Unconfirmed or restricted works are omitted; a verification service failure is reported as `visibilityError`. All downloads, details and other profile views retain their ordinary guest credentials.
+
+Re-run the helper if your login expires. To revoke it, retire the reserved identity named **AgentMediaLens: local profile login** and revoke the dedicated API key in the local console; remove `.cache/provider/douyin-login.json`. When replacing a login, retire the previous reserved identity too. There is no need to sign out or change the normal guest pool.

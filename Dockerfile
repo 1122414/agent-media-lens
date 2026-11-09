@@ -19,6 +19,7 @@ COPY --from=js /app/node_modules ./node_modules
 COPY --from=js /app/dist ./dist
 COPY package.json ./
 COPY workers/ workers/
+COPY scripts/douyin-login.py scripts/douyin-login.py
 RUN useradd --create-home --uid 10001 lens && mkdir /data && chown lens /data
 USER lens
 ENV MEDIA_LENS_CACHE=/data/tasks HF_HOME=/data/models

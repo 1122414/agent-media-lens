@@ -26,6 +26,15 @@ media-lens profile "$PROFILE_URL" --view collection --collection-id "$COLLECTION
 
 每条记录包含作者、作品链接、标题、发布时刻、时长和公开互动数。点赞、播放、评论、收藏或分享未公开时显示 null。默认补查缺失点赞的作品详情，可加 `--list-only` 只读目录。返回 `view=collection` 表示作品来自指定合集，`postListError` 会说明投稿列表是否受限。抖音结果若标记 `guestLimited: true`，表示这是访客能看到的部分投稿：可能缺少最新作品，且没有可用的下一页。即使此时返回零条，也不能推断作者没有作品。
 
+**可选：用自己的本机登录读取抖音投稿。** 在自己的终端执行一次 `media-lens douyin-login`，Mac 可用 `media-lens douyin-login --clipboard`，按提示登录并在复制 Cookie 后只按回车。查询不需要开启浏览器；不要把 Cookie 发到聊天。首次部署请先按[本机登录配置](docs/providers/douyin.md#optional-local-login-for-public-uploads)准备专用密钥。
+
+```sh
+media-lens profile "$PROFILE_URL" --local-login --view posts --count 3
+media-lens profile "$PROFILE_URL" --local-login --view posts --count 3 --cursor "$NEXT_CURSOR"
+```
+
+插件参数为 `auth: "local-login"`；不传时仍为访客。登录模式只用于作者投稿，不用于下载。用发布时间区分新作品与置顶作品，空标题表示平台没有提供标题。
+
 ## 安装
 
 准备 Node 24.12+（24.x）、pnpm 11.5、Python 3.12、uv、FFmpeg、ffprobe 和 Tesseract。OCR 需要 chi_sim 与 eng 语言包。第一次转写会按需下载模型，可提前准备缓存。

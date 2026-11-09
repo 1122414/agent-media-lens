@@ -18,7 +18,7 @@ flowchart LR
 
 ## Creator profiles
 
-Run `media-lens profile "$PROFILE_URL" --count 5` for either platform, or call `media_list_profile` from the plugin. It returns canonical links, titles, upload times, duration and the available engagement counts without opening a browser. Use the returned view and cursor to continue. A collection has a separate scope from all uploads. [Profile contract](docs/architecture/data-contracts.md)
+Run `media-lens profile "$PROFILE_URL" --count 5` for either platform, or call `media_list_profile` from the plugin. It returns canonical links, titles, upload times, duration and the available engagement counts without opening a browser. Use the returned view and cursor to continue. A collection has a separate scope from all uploads. [Profile contract](docs/architecture/data-contracts.md). For opt-in, browser-free Douyin upload queries with a locally reserved login, see [setup and revocation](docs/providers/douyin.md#optional-local-login-for-public-uploads).
 
 ## Install from source
 

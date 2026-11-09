@@ -11,6 +11,7 @@ export const profileOptions = z
     view: z
       .enum(["overview", "posts", "collections", "collection"])
       .default("overview"),
+    auth: z.enum(["guest", "local-login"]).default("guest"),
     collectionId: z.string().regex(digits).optional(),
     cursor: cursor.optional(),
     count: z.int().min(1).max(20).default(5),
@@ -92,6 +93,23 @@ const row = z.object({
   fetched_at: z.iso.datetime({ offset: true }),
   duration_ms: z.number().nonnegative().nullable(),
   stats: metrics,
+  raw: z.unknown().optional(),
+});
+// Signed-in feeds may include audience-restricted posts. The upstream's
+// normalized private flag defaults missing privacy to public; require explicit evidence.
+const publicUpload = z.object({
+  aweme_id: z.string(),
+  author: z.object({
+    sec_uid: z.string(),
+    secret: z.union([z.literal(0), z.literal(false)]).optional(),
+  }),
+  status: z.object({
+    private_status: z.literal(0),
+    is_delete: z.literal(false),
+    is_prohibited: z.literal(false),
+    allow_share: z.literal(true),
+  }),
+  is_top: z.union([z.literal(0), z.literal(1), z.boolean()]).optional(),
 });
 const pageFields = { cursor: cursor.nullish(), has_more: z.boolean() };
 const postsPage = z.object({ ...pageFields, items: z.array(row) });
@@ -161,7 +179,7 @@ interface Collection {
   name: string;
   count: number | null;
 }
-type Item = NonNullable<ReturnType<typeof post>>;
+type Item = NonNullable<ReturnType<typeof post>> & { pinned: boolean | null };
 export async function listProfile(
   c: Config,
   input: string,
@@ -172,6 +190,15 @@ export async function listProfile(
     p = await identifyProfile(input);
   if (c.provider !== "evil0ctal")
     throw new LensError("NATIVE_UNSUPPORTED", "主页作品目录需要 Evil0ctal");
+  const signed = o.auth === "local-login";
+  if (
+    signed &&
+    (p.platform !== "douyin" || !["overview", "posts"].includes(o.view))
+  )
+    throw new LensError(
+      "LOCAL_LOGIN_SCOPE",
+      "本机登录仅用于抖音作者的公开投稿",
+    );
   const params: Record<string, string> = { count: String(o.count) };
   if (o.cursor) params.cursor = o.cursor;
   const args = { ...params, sec_user_id: p.id };
@@ -190,6 +217,7 @@ export async function listProfile(
       next: nextCursor(result, o.cursor),
     };
   }
+  let visibilityError: string | null = null;
   async function works(collectionId?: string) {
     const whole = Boolean(collectionId) && p.platform === "bilibili";
     const source = collectionId
@@ -201,14 +229,73 @@ export async function listProfile(
             ? { mix_id: collectionId }
             : { ...params, mix_id: collectionId },
         )
-      : await query(c, p.platform, "user/posts", args);
+      : await query(c, p.platform, "user/posts", args, undefined, o.auth);
     const result = postsPage.parse(source.data);
     const guestLimited =
       !collectionId && p.platform === "douyin" && source.guestFallback;
     const all = new Map<string, Item>();
+    let guestUnavailable = false;
     for (const raw of result.items) {
-      const item = post(p, raw);
-      if (item) all.set(item.id, item);
+      let item = post(p, raw);
+      if (!item || all.has(item.id)) continue;
+      let pinned: boolean | null = null;
+      if (signed) {
+        const visible = publicUpload.safeParse(raw.raw);
+        if (
+          !visible.success ||
+          visible.data.aweme_id !== item.id ||
+          visible.data.author.sec_uid !== p.id
+        )
+          continue;
+        pinned =
+          visible.data.is_top == null ? null : Boolean(visible.data.is_top);
+        // Some logged-in lists omit the account's privacy flag. Verify that exact
+        // work as an ordinary visitor before returning even its title.
+        if (visible.data.author.secret === undefined) {
+          if (guestUnavailable) continue;
+          try {
+            const response = await query(c, "douyin", "video", {
+              url: item.url,
+              include_raw: "true",
+              refresh: "true",
+            });
+            const detail = row.parse(response.data);
+            const checked = post(p, detail),
+              proof = publicUpload.safeParse(detail.raw);
+            if (
+              !checked ||
+              checked.id !== item.id ||
+              !proof.success ||
+              proof.data.author.sec_uid !== p.id ||
+              proof.data.aweme_id !== item.id
+            )
+              continue;
+            item = {
+              ...checked,
+              title: checked.title || item.title,
+              stats: {
+                likes: checked.stats.likes ?? item.stats.likes,
+                views: checked.stats.views ?? item.stats.views,
+                comments: checked.stats.comments ?? item.stats.comments,
+                favorites: checked.stats.favorites ?? item.stats.favorites,
+                shares: checked.stats.shares ?? item.stats.shares,
+              },
+              statsAt:
+                checked.stats.likes === null && item.stats.likes !== null
+                  ? item.statsAt
+                  : checked.statsAt,
+            };
+          } catch (error) {
+            const code = failure(error).code;
+            if (!["CONTENT_PRIVATE", "NOT_FOUND"].includes(code)) {
+              visibilityError = code;
+              guestUnavailable = true;
+            }
+            continue;
+          }
+        }
+      }
+      all.set(item.id, { ...item, pinned });
     }
     const offset = whole ? Number(o.cursor ?? 0) : 0;
     const values = [...all.values()];
@@ -231,7 +318,7 @@ export async function listProfile(
   let items: Item[] = [],
     next: string | null = null;
   let guestLimited = false;
-  if (o.view === "overview") {
+  if (o.view === "overview" && !signed) {
     // A space exposes independent resources. A collection is always labelled
     // separately, even if its entries cover every publicly visible post.
     // A single guest can serve both reads in sequence.
@@ -303,6 +390,8 @@ export async function listProfile(
   }
   return {
     profile: p,
+    auth: o.auth,
+    visibilityError,
     view,
     collectionId: collectionId ?? null,
     items,

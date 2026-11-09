@@ -1,6 +1,6 @@
 [project]
 name = "agent-media-lens-worker"
-version = "0.4.0"
+version = "0.5.0"
 requires-python = ">=3.12,<3.13"
 dependencies = ["faster-whisper>=1.2,<2", "numpy>=2,<3"]
 
