@@ -2,6 +2,8 @@
 
 Run pnpm build, pnpm lint, pnpm test, uv run ruff check workers scripts/douyin-login.py tests, uv run mypy workers, uv run pytest -q tests, and node scripts/check-plugin.mjs. Build before testing because the stdio test launches the compiled entry point.
 
+Tests that start FFmpeg, Tesseract and the real Python worker use a per-case timeout (20–30 seconds). The five-second unit-test default interrupted a mixed-album run on a shared [Linux runner](https://github.com/1122414/agent-media-lens/actions/runs/42589627084/job/129067785112); the frame, OCR, page, byte-budget and cleanup assertions remain mandatory.
+
 Provider fixtures cover URL validation, explicit public/download permission, v5 task polling and image album rejection. The generated FFmpeg clip tests exercise real decoding, frames, OCR, task storage, MCP image bytes and CLI reads without a provider identity. The suite injects a fixture at the acquisition boundary.
 
 A separate manual acceptance used generated Mandarin and English speech with different slides, CPU base and installed Tesseract language packs. English returned the settings and save instructions at 0–4s. Mandarin returned the corresponding spoken instructions at 0–6.8s. A fresh Codex CLI session retrieved the English transcript, read f000 as image content, correctly described white background and black lettering and saved a timestamped report. These runs never fetched a live platform video.

@@ -251,4 +251,4 @@ it("feeds note video and ordered stills through the real worker and returns JPEG
     lens.store.db.close();
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 20000);

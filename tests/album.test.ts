@@ -127,7 +127,7 @@ it("processes mixed pages with local timestamps, a shared byte limit and transie
     lens.store.db.close();
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 20000);
 it("removes preceding pages if a subsequent public asset fails", async () => {
   const root = mkdtempSync(join(tmpdir(), "lens-album-fail-"));
   let n = 0;
