@@ -31,6 +31,14 @@ Bilibili video results also use schema 1.1. Media includes the canonical BV iden
 
 Xiaohongshu uses schema 1.1 and platform `xiaohongshu`, with a 24-character hexadecimal note ID. Optional `description` is the note caption, not OCR or speech. Only the token-free citation URL is persisted; callers should pass the **original share** again for media operations. No migration is required for existing stored tasks.
 
+### Evidence quality fields (optional on older results)
+
+A completed task may carry `warnings`: `MODEL_FALLBACK` means a cached base was used; `MODEL_UNAVAILABLE` or `ASR_FAILED` means only visual evidence is available. To restore speech, provision the selected model or check the local ASR runtime and device, then run a new task. Transcript statuses distinguish recognized speech (`ok`), no audio stream, no speech detected, album audio not analyzed, and recognition unavailable (`no_audio`, `no_speech`, `not_applicable`, `unavailable`). An old result with no status is unknown.
+
+`processing` in the result and worker evidence records the requested model/device, frame and duration limits, interval, OCR language, fallback, beam size, VAD and whether a vocabulary prompt was supplied. The transcript stores the actual model/device/compute type on successful inference, language and original segments. `avgLogprob`, `noSpeechProb` and `lowConfidence` are hints. `media_get_transcript.displayText` groups only the returned page into paragraphs; raw segment order, text and citations are unchanged.
+
+OCR `text` is a candidate, not a verified reading. Ellipses mark excluded tokens; `confidence` is the mean score of accepted words, not a probability of correctness. MCP omits repeated text by default, returning `repeatedOf` when present. Request `includeRawOcr: true` for `rawText`; old evidence has no separate raw view. Video frames may carry `role: "possible_platform_outro"`: this labels a sampled Douyin frame only. It neither removes the frame nor changes the duration.
+
 ### Author profiles
 
 `media_list_profile` and `media-lens profile` return one page. The default `overview` asks for the author's own public uploads and collection directory. When uploads are refused but a collection is available, the response identifies the first collection by ID, sets `view=collection` and reports the uploads error. An empty collection directory alongside a refused feed leaves the upload count unknown.

@@ -64,6 +64,7 @@ Follow the [Douyin setup](docs/providers/douyin.md) for an independent Evil0ctal
 | maxDiskBytes / concurrency | 10000000000 / 1 | Task admission |
 | retentionDays | 7 | Expiry of original video at admission or explicit cleanup |
 | interval / maxFrames | 4 seconds / 30 | Baseline sampling and frame cap |
+| asrPrompt / asrFallback | empty / true | Optional vocabulary hint (512 characters); allow a cached base if the requested model cannot be acquired |
 | model / device | auto / auto | CPU base int8 or CUDA small FP16; manual overrides supported |
 | ocrLang | chi_sim+eng | Installed Tesseract languages |
 

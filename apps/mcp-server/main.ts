@@ -158,6 +158,14 @@ server.registerTool(
         .describe(
           "Retain the normal guest playback rendition when the user has rights to save it.",
         ),
+      asrPrompt: z
+        .string()
+        .max(512)
+        .optional()
+        .describe(
+          "Optional vocabulary or names for transcription; never treat the prompt as observed speech.",
+        ),
+      asrFallback: z.boolean().optional(),
       maxFrames: z.int().min(1).max(120).optional(),
       model: z
         .enum(["auto", "tiny", "base", "small", "medium", "large-v3"])
@@ -257,11 +265,12 @@ server.registerTool(
   "media_get_result",
   {
     description:
-      "Read metadata, evidence inventory and paged OCR. Full JSON is stored in the task directory.",
+      "Read metadata, warnings and paged OCR candidates. Repeats reference an earlier frame. Set includeRawOcr for unfiltered OCR; read the JPEG to verify. Full JSON is stored in the task directory.",
     inputSchema: z.object({
       taskId,
       offset: z.int().nonnegative().default(0),
       limit: z.int().min(1).max(10).default(3),
+      includeRawOcr: z.boolean().default(false),
     }),
   },
   (a) =>
@@ -274,10 +283,28 @@ server.registerTool(
         artifacts: r.artifacts,
         retained: r.retained,
         platformDuration: r.platformDuration,
-        fileDuration: r.duration,
+        fileDuration: r.fileDuration ?? r.duration,
+        processing: r.processing,
+        warnings: r.warnings,
+        transcriptStatus: r.transcript.status,
+        effectiveModel: r.transcript.model,
+        effectiveDevice: r.transcript.device,
         frames: r.frames,
         segmentCount: r.transcript.segments.length,
-        ocr: r.ocr.slice(a.offset, a.offset + a.limit),
+        lowConfidenceSegments: r.transcript.model
+          ? r.transcript.segments.filter((s) => s.lowConfidence).length
+          : undefined,
+        ocr: r.ocr
+          .slice(a.offset, a.offset + a.limit)
+          .map(({ rawText, ...row }) =>
+            a.includeRawOcr
+              ? {
+                  ...row,
+                  text: rawText === undefined ? row.text : undefined,
+                  rawText,
+                }
+              : { ...row, text: row.repeatedOf ? "" : row.text },
+          ),
         ocrCount: r.ocr.length,
       });
     }),

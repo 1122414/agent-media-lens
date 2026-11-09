@@ -24,6 +24,8 @@ const options = z
     keepPlayback: z.boolean().default(false),
     provider: configSchema.shape.provider.removeDefault().optional(),
     maxFrames: configSchema.shape.maxFrames.removeDefault().optional(),
+    asrPrompt: configSchema.shape.asrPrompt.removeDefault().optional(),
+    asrFallback: z.boolean().optional(),
     model: configSchema.shape.model.removeDefault().optional(),
   })
   .refine(
@@ -167,6 +169,7 @@ export class Lens {
           (pid) => this.store.trackWorker(id, pid),
           temporaryPlayback,
           slides?.length,
+          media.platform,
         );
         controller.signal.throwIfAborted();
         const artifacts: Record<string, string> = {
@@ -179,22 +182,33 @@ export class Lens {
           JSON.stringify(evidence.transcript),
           { mode: 0o600 },
         );
+        const outroFrames = new Set(
+          evidence.frames
+            .filter((f) => f.role === "possible_platform_outro")
+            .map((f) => f.id),
+        );
         const lines = [
           "# Media evidence",
           JSON.stringify(media.title),
           media.sourceUrl,
           "",
           "## Speech",
+          ...(evidence.transcript.status
+            ? [`Status: ${evidence.transcript.status}`]
+            : []),
+          ...(evidence.warnings ?? []).map((w) => `Warning: ${w}`),
           ...evidence.transcript.segments.map(
             (s) =>
               `- [${s.start.toFixed(1)}–${s.end.toFixed(1)}s] ${JSON.stringify(s.text)}`,
           ),
           "",
           "## Frame text",
-          ...evidence.ocr.map(
-            (o) =>
-              `- [${o.page ? "第 " + o.page + " 页 · " : ""}${o.timestamp == null ? "静态图" : o.timestamp + "s"} · ${o.frameId}] ${JSON.stringify(o.text)}`,
-          ),
+          ...evidence.ocr
+            .filter((o) => o.text && !o.repeatedOf)
+            .map(
+              (o) =>
+                `- [${o.page ? "第 " + o.page + " 页 · " : ""}${o.timestamp == null ? "静态图" : o.timestamp + "s"} · ${o.frameId}${outroFrames.has(o.frameId) ? " · 疑似平台片尾" : ""}] ${JSON.stringify(o.text)}`,
+            ),
         ];
         writeFileSync(this.store.file(id, "analysis.md"), lines.join("\n"), {
           mode: 0o600,
@@ -213,7 +227,10 @@ export class Lens {
           artifacts.playbackPath = "playback.mp4";
         } else artifacts.sourcePath = "source.mp4";
         this.store.transaction(() => {
-          const completed = this.store.stage(id, "COMPLETED", { artifacts });
+          const completed = this.store.stage(id, "COMPLETED", {
+            artifacts,
+            warnings: evidence.warnings,
+          });
           const result: Result = {
             schemaVersion: album || media.platform !== "douyin" ? "1.1" : "1.0",
             retained: Boolean(artifacts.sourcePath || artifacts.playbackPath),
@@ -324,8 +341,25 @@ export class Lens {
     const t = this.result(id).transcript;
     const all = t.segments.filter((s) => s.end >= start && s.start <= end);
     const segments = all.slice(offset, offset + limit);
+    const paragraphs: string[] = [];
+    let previousEnd = -Infinity;
+    for (const s of segments) {
+      if (
+        s.start - previousEnd >= 1 ||
+        !paragraphs.length ||
+        paragraphs[paragraphs.length - 1].length >= 120
+      )
+        paragraphs.push(s.text);
+      else paragraphs[paragraphs.length - 1] += " " + s.text;
+      previousEnd = s.end;
+    }
     return {
       language: t.language,
+      status: t.status,
+      model: t.model,
+      device: t.device,
+      warning: t.warning,
+      displayText: paragraphs.join("\n\n"),
       text: segments.map((s) => s.text).join(" "),
       segments,
       total: all.length,

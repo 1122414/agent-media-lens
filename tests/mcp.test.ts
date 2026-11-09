@@ -1,4 +1,4 @@
-import { it, expect } from "vitest";
+import { it, expect, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
@@ -21,7 +21,7 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
           sourceUrl: url,
           id: "123456789",
           author: "Test",
-          duration: 2,
+          duration: 1.5,
           title: "Generated test clip",
         },
         stream: "fixture",
@@ -35,6 +35,10 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
           "lavfi",
           "-i",
           "testsrc2=size=320x180:rate=10:duration=2",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=duration=2",
           "-c:v",
           "mpeg4",
           path,
@@ -45,8 +49,14 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
   );
   const client = new Client({ name: "lens-test", version: "1.0" });
   try {
-    const job = lens.start(url);
-    expect((await job.done).status).toBe("COMPLETED");
+    vi.stubEnv("HF_HOME", join(cache, "isolated-models"));
+    vi.stubEnv("HF_HUB_CACHE", join(cache, "isolated-models", "hub"));
+    vi.stubEnv("HF_HUB_OFFLINE", "1");
+    const job = lens.start(url, { model: "small" });
+    expect(await job.done).toMatchObject({
+      status: "COMPLETED",
+      warnings: ["MODEL_UNAVAILABLE"],
+    });
     const env = { PATH: process.env.PATH!, MEDIA_LENS_CACHE: cache };
     await client.connect(
       new StdioClientTransport({
@@ -150,6 +160,24 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       "media_get_result",
     ])
       expect((await call(name, a)).isError).toBeFalsy();
+    const inventory = data(await call("media_get_result", a));
+    expect(inventory).toMatchObject({
+      transcriptStatus: "unavailable",
+      platformDuration: 1.5,
+      fileDuration: 2,
+      processing: { requestedModel: "small", maxFrames: 30 },
+      warnings: ["MODEL_UNAVAILABLE"],
+      retained: true,
+    });
+    expect(inventory.ocr[0]).not.toHaveProperty("rawText");
+    expect(
+      data(await call("media_get_result", { ...a, includeRawOcr: true }))
+        .ocr[0],
+    ).toHaveProperty("rawText");
+    expect(data(await call("media_get_transcript", a))).toMatchObject({
+      status: "unavailable",
+      displayText: "",
+    });
     const result = await call("media_get_frame", { ...a, frameId: "f000" });
     const content = result.content[0];
     expect(content.type).toBe("image");
@@ -183,6 +211,7 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
     );
     expect(cli(["identify", "file:///tmp/s"]).status).toBe(2);
   } finally {
+    vi.unstubAllEnvs();
     await client.close();
     lens.store.db.close();
     rmSync(cache, { recursive: true, force: true });

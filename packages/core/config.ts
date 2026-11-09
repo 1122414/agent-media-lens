@@ -29,6 +29,8 @@ export const configSchema = z.strictObject({
     .enum(["auto", "tiny", "base", "small", "medium", "large-v3"])
     .default("auto"),
   device: z.enum(["auto", "cpu", "cuda"]).default("auto"),
+  asrFallback: z.boolean().default(true),
+  asrPrompt: z.string().trim().max(512).default(""),
   ocrLang: z
     .string()
     .regex(/^[a-z_]+(?:\+[a-z_]+)*$/)

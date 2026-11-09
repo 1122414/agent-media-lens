@@ -104,6 +104,7 @@ docker compose -f compose.yaml -f compose.local-provider.yaml run --rm -T lens d
 - 用 MEDIA_LENS_CONFIG 指定 JSON 文件，用 MEDIA_LENS_CACHE 覆盖缓存目录，运行 media-lens config 查看生效配置。默认并发 1、时长 600 秒、单文件 500 MB、缓存预算 10 GB、原片保留 7 天。启动新任务或运行 cleanup 时清除过期原片。
 - 单次分析可加 --discard-original，处理结束即清理原片；MCP 对应字段为 discardOriginal。
 - 初始抽帧间隔 4 秒，上限 30 帧；普通 CPU 默认 base/int8。可设置 interval、maxFrames、model、device 和 ocrLang。字段与默认值见[英文配置表](README.md)。
+- 专名较多时，可在分析命令加 `--asr-prompt "可选词汇"`（MCP：`asrPrompt`）。请求的模型不可用时，默认尝试本机已有的 base；加 `--strict-model` 或设置 `asrFallback: false` 可关闭回退。没有可用模型仍会返回画面；任务的 warnings 会解释原因。
 - B 站支持 BV、av 视频链接和 b23.tv 短链，保留指定的分 P。给采集服务密钥配置 `bilibili:read`，用 `media-lens doctor --platform bilibili` 核对。访客可读的单文件 MP4 可直接分析，默认每 P 最长 10 分钟。详见 [B 站适配说明](docs/providers/bilibili.md)。
 - 图文和实况照片按页分析，静态页生成一张 JPEG，实况页额外生成两帧动态证据。用 frames <任务号> --page 3 或 MCP 的 page 参数读取第三页，静态页没有时间戳。原生适配器目前可解析链接，元数据和下载依赖外部服务。
 - 抖音关闭「保存本地」时，仍可分析访客正常观看的播放流。需要保留有权保存的副本时，运行 `media-lens analyze "$SHARE_URL" --keep-playback`，或在 MCP 传 `keepPlayback: true`。结果里的 `playbackPath` 指向播放版本，`sourcePath` 指向平台提供的下载版本，路径均相对于任务目录。只有公开详情时可用 resolve 读元数据。私密、已删除、需要登录或平台拒绝访问的作品会返回错误。

@@ -161,10 +161,16 @@ cli
   .option("--discard-original", "处理后立即删除原片")
   .option("--keep-playback", "有权保存时，保留访客可观看的播放版本")
   .option("--model <name>")
+  .option("--strict-model", "缺少指定模型时仅返回视觉证据，不回退到 base")
+  .option("--asr-prompt <terms>", "可选转写词汇提示，最多 512 个字符")
   .option("--max-frames <n>", "关键帧上限", Number)
   .action(async (url, o) => {
     const lens = service();
-    const job = lens.start(url, o);
+    const { strictModel, ...options } = o;
+    const job = lens.start(
+      url,
+      strictModel ? { ...options, asrFallback: false } : options,
+    );
     const abort = () => lens.cancelAll();
     process.once("SIGINT", abort);
     try {

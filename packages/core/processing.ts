@@ -8,6 +8,7 @@ import {
   durationLimit,
   LensError,
   workerSchema,
+  type Media,
   type Stage,
 } from "./contracts.js";
 import type { Config } from "./config.js";
@@ -28,6 +29,7 @@ export function worker(
   trackWorker?: (pid: number) => void,
   temporaryPlayback = false,
   albumPages = 0,
+  platform?: Media["platform"],
 ) {
   const script = join(projectRoot, "workers", "media_worker.py");
   const local = join(projectRoot, ".venv", "bin", "python");
@@ -35,6 +37,7 @@ export function worker(
     process.env.MEDIA_LENS_PYTHON || (existsSync(local) ? local : "python3");
   const env = { ...process.env };
   delete env.EVIL0CTAL_API_KEY;
+  env.MEDIA_LENS_ASR_PROMPT = c.asrPrompt;
   return new Promise<z.infer<typeof workerSchema>>((ok, fail) => {
     signal.throwIfAborted();
     const child = spawn(
@@ -44,6 +47,8 @@ export function worker(
         dir,
         ...(albumPages ? ["--album-pages", String(albumPages)] : []),
         ...(temporaryPlayback ? ["--temporary-playback"] : []),
+        ...(platform ? ["--platform", platform] : []),
+        ...(c.asrFallback ? [] : ["--no-asr-fallback"]),
         "--max-seconds",
         String(c.maxSeconds),
         "--interval",
@@ -124,6 +129,20 @@ export function worker(
             msg.error,
             `${lastStage}：${msg.tool} ${msg.error === "TOOL_MISSING" ? "未安装或不在 PATH" : msg.error === "TOOL_TIMEOUT" ? "执行超时" : "处理失败"}；请运行 media-lens doctor 检查本机环境`,
           );
+        if (msg.error === "WORKER_FAILED") {
+          const hint = new Map([
+            ["PermissionError", "本地文件权限不足，请检查任务目录与模型缓存"],
+            ["OSError", "文件系统或设备操作失败，请检查可用空间与权限"],
+            ["KeyError", "媒体缺少解码所需的字段"],
+            ["RuntimeError", "运行库执行失败，请检查所选设备及依赖"],
+            ["ValueError", "本地媒体或工具输出无效"],
+          ]).get(msg.type);
+          if (hint)
+            detail = new LensError(
+              "WORKER_FAILED",
+              `${lastStage}：${hint}（${msg.type}）`,
+            );
+        }
         if (
           [
             "DURATION_LIMIT",

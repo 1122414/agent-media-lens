@@ -87,7 +87,45 @@ def probe(path: Path, limit: int) -> tuple[float, bool]:
     return duration, any(s["codec_type"] == "audio" for s in streams)
 
 
-def transcribe(path: Path, model_name: str, device: str) -> dict[str, Any]:
+def model_snapshot(name: str, fallback: bool) -> tuple[str, str]:
+    from faster_whisper.utils import download_model
+
+    def locate(size: str, local: bool) -> str:
+        snapshot = str(download_model(size, local_files_only=local))
+        # A snapshot directory alone can be left behind by an interrupted download.
+        for filename in ("model.bin", "config.json", "tokenizer.json"):
+            if not (Path(snapshot) / filename).is_file():
+                raise FileNotFoundError(filename)
+        return snapshot
+
+    try:
+        return locate(name, True), name
+    except FileNotFoundError:
+        pass
+    try:
+        return locate(name, False), name
+    except OSError as exc:
+        # Hub/transport errors generally have no errno. Surface actual OS failures.
+        if exc.errno is not None and not isinstance(
+            exc, (ConnectionError, TimeoutError, FileNotFoundError)
+        ):
+            raise
+        if fallback and name != "base":
+            try:
+                return locate("base", True), "base"
+            except FileNotFoundError:
+                pass
+        raise WorkerProblem("MODEL_UNAVAILABLE") from exc
+
+
+def transcribe(
+    path: Path,
+    model_name: str,
+    device: str,
+    fallback: bool,
+    prompt: str,
+    duration: float,
+) -> dict[str, Any]:
     import ctranslate2
     import numpy as np
     from faster_whisper import WhisperModel
@@ -96,29 +134,55 @@ def transcribe(path: Path, model_name: str, device: str) -> dict[str, Any]:
         device = "cuda" if ctranslate2.get_cuda_device_count() else "cpu"
     if model_name == "auto":
         model_name = "small" if device == "cuda" else "base"
-    settings = {
-        "device": device,
-        "compute_type": "int8" if device == "cpu" else "float16",
-        "cpu_threads": min(4, os.cpu_count() or 1),
-    }
-    try:
-        model = WhisperModel(model_name, local_files_only=True, **settings)
-    except (OSError, RuntimeError, ValueError):
-        model = WhisperModel(model_name, **settings)
+    snapshot, effective = model_snapshot(model_name, fallback)
+    compute = "int8" if device == "cpu" else "float16"
     with wave.open(str(path), "rb") as wav:
+        duration = min(duration, wav.getnframes() / wav.getframerate())
         pcm = (
             np.frombuffer(wav.readframes(wav.getnframes()), dtype="<i2").astype(
                 np.float32
             )
             / 32768.0
         )
-    segments, info = model.transcribe(pcm, vad_filter=True, beam_size=3)
-    rows = [
-        {"start": s.start, "end": s.end, "text": s.text.strip()}
-        for s in segments
-        if s.text.strip()
-    ]
+    try:
+        model = WhisperModel(
+            snapshot,
+            local_files_only=True,
+            device=device,
+            compute_type=compute,
+            cpu_threads=min(4, os.cpu_count() or 1),
+        )
+        segments, info = model.transcribe(
+            pcm,
+            vad_filter=True,
+            beam_size=3,
+            initial_prompt=prompt or None,
+            condition_on_previous_text=True,
+        )
+        rows = []
+        for segment in segments:
+            if not segment.text.strip():
+                continue
+            start = max(0.0, min(duration, segment.start))
+            rows.append(
+                {
+                    "start": start,
+                    "end": max(start, min(duration, segment.end)),
+                    "text": segment.text.strip(),
+                    "avgLogprob": segment.avg_logprob,
+                    "noSpeechProb": segment.no_speech_prob,
+                    "lowConfidence": segment.avg_logprob < -1
+                    or segment.no_speech_prob > 0.6,
+                }
+            )
+    except RuntimeError as exc:
+        raise WorkerProblem("ASR_FAILED") from exc
     return {
+        "status": "ok" if rows else "no_speech",
+        "model": effective,
+        "device": device,
+        "computeType": compute,
+        **({"warning": "MODEL_FALLBACK"} if effective != model_name else {}),
         "language": info.language if rows else None,
         "text": " ".join(str(r["text"]) for r in rows),
         "segments": rows,
@@ -126,36 +190,27 @@ def transcribe(path: Path, model_name: str, device: str) -> dict[str, Any]:
 
 
 def choose_frames(samples: list[bytes], interval: float, maximum: int) -> list[int]:
-    """Rank real one-second samples by scene and lower-third change; reserve coverage."""
-    if not samples:
-        return [0]
-    changes: list[tuple[float, int]] = []
-    candidates = [0]
-    last = samples[0]
-    for index in range(1, len(samples)):
-        delta = [
-            abs(a - b) for a, b in zip(samples[index], samples[index - 1], strict=True)
-        ]
+    """Reserve wall-clock anchors, then use the remaining budget for visual changes."""
+    if not samples or maximum <= 1:
+        return [0] if maximum > 0 else []
+    last = len(samples) - 1
+    if maximum == 2 or all(sample == samples[0] for sample in samples):
+        return sorted({0, last})
+    budget = min(maximum, len(samples))
+    anchors = min(
+        budget, max(2, min(math.ceil(budget * 0.75), math.ceil(last / interval) + 1))
+    )
+    selected = {round(i * last / (anchors - 1)) for i in range(anchors)}
+    changes = []
+    for i in range(1, len(samples)):
+        delta = [abs(a - b) for a, b in zip(samples[i], samples[i - 1], strict=True)]
         score = max(sum(delta) / len(delta), sum(delta[-256:]) / 256)
         if score >= 12:
-            changes.append((score, index))
-        if (
-            index - candidates[-1] >= interval
-            and sum(abs(a - b) for a, b in zip(samples[index], last, strict=True))
-            / len(last)
-            >= 2
-        ):
-            candidates.append(index)
-            last = samples[index]
-    target = min(len(candidates), max(1, (maximum + 1) // 2))
-    selected = {
-        candidates[round(i * (len(candidates) - 1) / max(1, target - 1))]
-        for i in range(target)
-    }
-    for index in [i for _, i in sorted(changes, reverse=True)] + candidates:
-        if len(selected) >= maximum:
+            changes.append((score, i))
+    for _, i in sorted(changes, reverse=True):
+        if len(selected) >= budget:
             break
-        selected.add(index)
+        selected.add(i)
     return sorted(selected)
 
 
@@ -256,40 +311,103 @@ def album_frames(
     return rows
 
 
+def ocr_lines(tsv: str) -> tuple[str, str, float | None]:
+    lines: dict[tuple[str, ...], list[tuple[str, float]]] = {}
+    for row in tsv.splitlines()[1:]:
+        fields = row.split("\t", 11)
+        if len(fields) != 12 or fields[0] != "5" or not fields[11].strip():
+            continue
+        lines.setdefault(tuple(fields[1:5]), []).append(
+            (fields[11].strip(), float(fields[10]))
+        )
+    raw, clean = [], []
+    scores: list[float] = []
+    for words in lines.values():
+        raw.append(" ".join(w for w, _ in words))
+        accepted = [w for w, confidence in words if confidence >= 60]
+        if accepted and any(ch.isalnum() for w in accepted for ch in w):
+            # Do not splice words across a rejected token (e.g. a missing negation).
+            pieces: list[str] = []
+            for word, conf in words:
+                if conf >= 60:
+                    pieces.append(word)
+                elif not pieces or pieces[-1] != "…":
+                    pieces.append("…")
+            clean.append(" ".join(pieces))
+            scores.extend(conf for _, conf in words if conf >= 60)
+    return (
+        "\n".join(raw)[:16000],
+        "\n".join(clean)[:16000],
+        round(sum(scores) / len(scores), 1) if scores else None,
+    )
+
+
 def read_ocr(
-    directory: Path, images: list[dict[str, Any]], language: str
+    directory: Path,
+    images: list[dict[str, Any]],
+    language: str,
+    platform: str,
+    duration: float | None,
 ) -> list[dict[str, Any]]:
     event("OCR")
     ocr = []
+    seen: dict[tuple[int | None, str], str] = {}
     for image in images:
-        text = (
-            run(
-                [
-                    "tesseract",
-                    str(directory / image["imagePath"]),
-                    "stdout",
-                    "-l",
-                    language,
-                    "--psm",
-                    "11",
-                ],
-                60,
-            )
-            .decode()
-            .strip()[:16000]
-        )
-        ocr.append(
-            {
-                **({"page": image["page"]} if "page" in image else {}),
-                "timestamp": image["timestamp"],
-                "frameId": image["id"],
-                "text": text,
-            }
-        )
+        tsv = run(
+            [
+                "tesseract",
+                str((directory / image["imagePath"]).resolve()),
+                "stdout",
+                "-l",
+                language,
+                "--psm",
+                "11",
+                "tsv",
+            ],
+            60,
+        ).decode()
+        raw, clean, confidence = ocr_lines(tsv)
+        sec = image["timestamp"]
+        if (
+            duration
+            and platform == "douyin"
+            and sec is not None
+            and sec >= duration - min(6, duration * 0.15)
+            and "发现更多创作者" in "".join(raw.split())
+        ):
+            image["role"] = "possible_platform_outro"
+        row = {
+            **({"page": image["page"]} if "page" in image else {}),
+            "timestamp": sec,
+            "frameId": image["id"],
+            "text": clean,
+            "rawText": raw,
+            "confidence": confidence,
+        }
+        key = (image.get("page"), clean)
+        if clean:
+            if key in seen:
+                row["repeatedOf"] = seen[key]
+            else:
+                seen[key] = image["id"]
+        ocr.append(row)
     return ocr
 
 
 def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
+    prompt = os.environ.get("MEDIA_LENS_ASR_PROMPT", "")
+    processing = {
+        "requestedModel": options.model,
+        "requestedDevice": options.device,
+        "asrFallback": not options.no_asr_fallback,
+        "promptConfigured": bool(prompt),
+        "maxFrames": options.max_frames,
+        "maxSeconds": options.max_seconds,
+        "interval": options.interval,
+        "ocrLang": options.ocr_lang,
+        "beamSize": 3,
+        "vadFilter": True,
+    }
     if options.album_pages:
         if not 1 <= options.album_pages <= options.max_frames:
             raise ValueError("IMAGE_LIMIT")
@@ -299,14 +417,29 @@ def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
         )
         return {
             "duration": None,
-            "transcript": {"language": None, "text": "", "segments": []},
+            "processing": processing,
+            "warnings": [],
+            "transcript": {
+                "status": "not_applicable",
+                "language": None,
+                "text": "",
+                "segments": [],
+            },
             "frames": images,
-            "ocr": read_ocr(directory, images, options.ocr_lang),
+            "ocr": read_ocr(
+                directory, images, options.ocr_lang, options.platform, None
+            ),
         }
     path = directory / (".playback.mp4" if options.temporary_playback else "source.mp4")
     event("EXTRACTING_AUDIO")
     duration, audio = probe(path, options.max_seconds)
-    transcript: dict[str, Any] = {"language": None, "text": "", "segments": []}
+    transcript: dict[str, Any] = {
+        "status": "no_audio",
+        "language": None,
+        "text": "",
+        "segments": [],
+    }
+    warnings: list[str] = []
     wav = directory / "audio.wav"
     try:
         if audio:
@@ -333,14 +466,34 @@ def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
             )
         event("TRANSCRIBING")
         if audio:
-            transcript = transcribe(wav, options.model, options.device)
+            try:
+                transcript = transcribe(
+                    wav,
+                    options.model,
+                    options.device,
+                    not options.no_asr_fallback,
+                    prompt,
+                    duration,
+                )
+                if transcript.get("warning"):
+                    warnings.append(transcript["warning"])
+            except ImportError:
+                warnings.append("ASR_FAILED")
+                transcript.update(status="unavailable", warning="ASR_FAILED")
+            except WorkerProblem as exc:
+                if str(exc) not in {"MODEL_UNAVAILABLE", "ASR_FAILED"}:
+                    raise
+                warnings.append(str(exc))
+                transcript.update(status="unavailable", warning=str(exc))
     finally:
         wav.unlink(missing_ok=True)
     event("EXTRACTING_FRAMES")
     images = frames(path, directory, duration, options.interval, options.max_frames)
-    ocr = read_ocr(directory, images, options.ocr_lang)
+    ocr = read_ocr(directory, images, options.ocr_lang, options.platform, duration)
     return {
         "duration": duration,
+        "processing": processing,
+        "warnings": warnings,
         "transcript": transcript,
         "frames": images,
         "ocr": ocr,
@@ -356,6 +509,8 @@ def main() -> int:
         choices=["auto", "tiny", "base", "small", "medium", "large-v3"],
     )
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
+    parser.add_argument("--no-asr-fallback", action="store_true")
+    parser.add_argument("--platform", choices=["douyin", "bilibili", "xiaohongshu"])
     parser.add_argument("--album-pages", type=int, default=0)
     parser.add_argument("--temporary-playback", action="store_true")
     parser.add_argument("--max-seconds", type=int, default=600)

@@ -24,6 +24,7 @@ export interface Task {
   stages: Timing[];
   retries: number;
   error?: { code: string; message: string };
+  warnings?: string[];
   artifacts?: Record<string, string>;
 }
 export class Store {
@@ -199,7 +200,9 @@ export class Store {
   stage(
     id: string,
     status: Stage,
-    extra: Partial<Pick<Task, "error" | "artifacts" | "retries">> = {},
+    extra: Partial<
+      Pick<Task, "error" | "artifacts" | "retries" | "warnings">
+    > = {},
   ) {
     const task = this.task(id);
     if (terminal.includes(task.status)) return task;

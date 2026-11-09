@@ -1,0 +1,9 @@
+# Recognizer failure and confidence are not observations about the source
+
+**Signals.** A job stopped during transcription before producing frames, an artistic number was wrong despite a high OCR score, and a quiet ending disappeared when the frame budget was reduced. These are different failure mechanisms; diagnose acquisition, recognition and sampling separately.
+
+- Model availability: test with a temporary empty Hugging Face cache and offline mode; never delete the operator’s weights. Verify a real MCP JPEG and an explicit unavailable transcript. A second test with only base cached distinguishes fallback from no model. Use the actual model and status when interpreting a result. Retain the [decoded PCM path](asr-pcm.md); a download failure and a decode failure need different remedies.
+- Evidence quality: compare a candidate with the same frame, not just a confidence threshold. One 83.8-confidence reading changed a 5 into an 8. A long voiced sample returned 484 segments and zero confidence flags despite reported name errors. Neither signal measures word accuracy. Unfiltered observations and frame IDs allow independent checks.
+- Sampling: measure timestamp gaps on the complete timeline. Spreading selections across change candidates can still cluster them in the introduction. On the same long work, time anchors reduced the maximum gap from 72 to 46 seconds at 30 frames. A separate 12-frame run regained a missing closing card. These are sampled seconds, not full coverage of every cut.
+
+Model isolation and page-local OCR are regression-tested in [Python](../../../tests/test_worker.py); the [MCP integration](../../../tests/mcp.test.ts) verifies partial results cross the serialization boundary. Empirical recognition limits are verified on these samples only; see the [repair assessment](../../development/2026-11-09_evidence-repair-review.md).

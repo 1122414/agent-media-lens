@@ -69,7 +69,10 @@ it("processes a real silent clip, reads evidence, guards active files and expire
   expect(lens.store.cleanup().removed).toBe(0);
   expect((await done).status).toBe("COMPLETED");
   expect(lens.store.task(taskId).retries).toBe(1);
-  expect(lens.transcript(taskId).total).toBe(0);
+  expect(lens.transcript(taskId)).toMatchObject({
+    total: 0,
+    status: "no_audio",
+  });
   expect(lens.frames(taskId).length).toBeGreaterThan(0);
   expect(
     Buffer.from(lens.image(taskId, { frameId: "f000" }).data, "base64")
@@ -246,4 +249,31 @@ it("reports both durations and the configuration hint before downloading an over
     message: expect.stringMatching(/601.0s.*600s.*maxSeconds/),
   });
   expect(task.stages.map((s) => s.stage)).not.toContain("DOWNLOADING");
+});
+
+it("formats the requested page of an older transcript without rewriting its evidence", () => {
+  const lens = new Lens(settings());
+  stores.push(lens.store);
+  const id = lens.store.create().taskId;
+  lens.store.stage(id, "COMPLETED", { artifacts: {} });
+  const segments = [
+    { start: 0, end: 1, text: "First" },
+    { start: 1, end: 2, text: "two" },
+    { start: 4, end: 5, text: "later" },
+  ];
+  writeFileSync(
+    lens.store.file(id, "result.json"),
+    JSON.stringify({
+      schemaVersion: "1.0",
+      artifacts: {},
+      transcript: { language: "en", text: "First two later", segments },
+    }),
+  );
+  const full = lens.transcript(id);
+  expect(full.displayText).toBe("First two\n\nlater");
+  expect(full.segments).toEqual(segments);
+  expect(full.status).toBeUndefined();
+  const page = lens.transcript(id, 0, 5, 1, 1);
+  expect(page.displayText).toBe("two");
+  expect(page.nextOffset).toBe(2);
 });

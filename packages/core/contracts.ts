@@ -84,9 +84,32 @@ export const stages = [
   "CANCELLED",
 ] as const;
 export type Stage = (typeof stages)[number];
+const warning = z.enum(["MODEL_UNAVAILABLE", "MODEL_FALLBACK", "ASR_FAILED"]);
 export const workerSchema = z.object({
   duration: z.number().positive().nullable(),
+  warnings: z.array(warning).optional(),
+  processing: z
+    .object({
+      requestedModel: z.string(),
+      requestedDevice: z.string(),
+      asrFallback: z.boolean(),
+      promptConfigured: z.boolean(),
+      maxFrames: z.int(),
+      maxSeconds: z.int(),
+      interval: z.number(),
+      ocrLang: z.string(),
+      beamSize: z.int(),
+      vadFilter: z.boolean(),
+    })
+    .optional(),
   transcript: z.object({
+    status: z
+      .enum(["ok", "no_audio", "no_speech", "not_applicable", "unavailable"])
+      .optional(),
+    warning: warning.optional(),
+    model: z.string().optional(),
+    device: z.string().optional(),
+    computeType: z.string().optional(),
     language: z.string().nullable(),
     text: z.string().max(500000),
     segments: z
@@ -94,6 +117,9 @@ export const workerSchema = z.object({
         z.object({
           start: z.number().nonnegative(),
           end: z.number().nonnegative(),
+          avgLogprob: z.number().optional(),
+          noSpeechProb: z.number().optional(),
+          lowConfidence: z.boolean().optional(),
           text: z.string(),
         }),
       )
@@ -105,6 +131,7 @@ export const workerSchema = z.object({
         id: z.string().regex(/^f\d{3}$/),
         timestamp: z.number().nonnegative().nullable(),
         page: z.int().positive().optional(),
+        role: z.literal("possible_platform_outro").optional(),
         imagePath: z.string().regex(/^f\d{3}\.jpg$/),
       }),
     )
@@ -116,6 +143,12 @@ export const workerSchema = z.object({
         timestamp: z.number().nonnegative().nullable(),
         page: z.int().positive().optional(),
         text: z.string().max(16000),
+        rawText: z.string().max(16000).optional(),
+        confidence: z.number().min(0).max(100).nullable().optional(),
+        repeatedOf: z
+          .string()
+          .regex(/^f\d{3}$/)
+          .optional(),
       }),
     )
     .max(120),
