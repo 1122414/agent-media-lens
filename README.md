@@ -95,7 +95,7 @@ The override makes loopback reach the running API by sharing its network namespa
 
 ## FAQ
 
-- **A share opens a photo note.** Identify returns its ID. The first video pipeline rejects albums with UNSUPPORTED_MEDIA.
+- **A share opens a photo note.** Resolve reports each page as still or live. Analyze extracts one poster per page and two motion frames per live page. Use frames --page N or the MCP page filter. Album inputs are transient; evidence and OCR remain.
 - **Why did the adapter refuse a playable link?** Resolve requires confirmed public visibility. Analysis also needs a guest-accessible media address. Login requirements, removal, expired CDN links and platform refusals can stop a specific task. The share-menu save setting is reported separately.
 - **Can I use native only?** It identifies direct and shortened shares. Native metadata and downloads report NATIVE_UNSUPPORTED.
 - **Where is analysis saved?** Each UUID directory contains result.json, transcript.json, evidence.json, JPEGs and analysis.md. Read cached media only in a private directory owned by the operator. No per-user access control is provided for a shared cache.

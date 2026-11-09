@@ -20,7 +20,10 @@ const content = z.object({
   title: z.string(),
   author: z.object({ nickname: z.string() }),
   duration_ms: z.number().nullish(),
-  media: z.object({ video: z.object({ url: z.string() }).nullish() }),
+  media: z.object({
+    video: z.object({ url: z.string() }).nullish(),
+    images: z.unknown().optional(),
+  }),
   raw: z.object({
     status: z.object({
       private_status: z.literal(0),
@@ -41,11 +44,14 @@ const content = z.object({
       .nullish(),
   }),
 });
-export function normalize(data: unknown) {
+export function normalize(
+  data: unknown,
+  source?: string,
+): import("./contracts.js").Candidate {
   const base = common.parse(data);
   if (base.is_private || base.is_deleted)
     throw new LensError("ACCESS_DENIED", "作品私密或已删除");
-  if (base.kind !== "video")
+  if (base.kind !== "video" && base.kind !== "image_album")
     throw new LensError("UNSUPPORTED_MEDIA", "该作品为非视频类型");
   const r = content.safeParse(data);
   if (!r.success)
@@ -63,6 +69,40 @@ export function normalize(data: unknown) {
             flags.prevent_download === false)
         ? "allowed"
         : "unknown";
+  if (base.kind === "image_album") {
+    const images = z
+      .array(
+        z.object({
+          url: z.string(),
+          video: z.object({ url: z.string() }).nullish(),
+        }),
+      )
+      .min(1)
+      .max(120)
+      .parse(v.media.images);
+    const slides = images.map((image) => ({
+      poster: checked(image.url, "photo").href,
+      clip: image.video ? checked(image.video.url, "stream").href : undefined,
+    }));
+    return {
+      media: mediaSchema.parse({
+        id: v.content_id,
+        platform: v.platform,
+        kind: "image_album",
+        sourceUrl: source ?? "https://www.douyin.com/note/" + v.content_id,
+        title: v.title,
+        author: v.author.nickname,
+        duration: null,
+        downloadPermission: permission,
+        pages: slides.map((slide, index) => ({
+          page: index + 1,
+          kind: slide.clip ? "live" : "still",
+        })),
+      }),
+      slides,
+      stream: null,
+    };
+  }
   const playback = v.media.video?.url;
   const download =
     permission === "allowed" && v.raw.video?.download_addr?.url_list[0];
@@ -231,7 +271,7 @@ export function evil(c: Config, request = fetch): Provider {
       }).toString();
       const read = (u: URL) => readProvider(u, key, signal, request);
       const initial = await read(url);
-      if (initial.status === 200) return normalize(initial.data);
+      if (initial.status === 200) return normalize(initial.data, source);
       const id = z.object({ task_id: z.uuid() }).parse(initial.data).task_id;
       for (let i = 0; i < 40; i++) {
         await delay(750, undefined, { signal });
@@ -243,7 +283,7 @@ export function evil(c: Config, request = fetch): Provider {
             error: providerError.nullish(),
           })
           .parse(r.data);
-        if (task.state === "done") return normalize(task.data);
+        if (task.state === "done") return normalize(task.data, source);
         if (task.state === "failed")
           throw providerFailure(
             task.error?.code,
@@ -292,8 +332,6 @@ export async function resolveMedia(
   provider = c.provider,
 ) {
   const link = await identify(input);
-  if (link.kind !== "video")
-    throw new LensError("UNSUPPORTED_MEDIA", "该作品为图文类型");
   const selected = provider === "evil0ctal" ? evil(c) : native;
   try {
     const found = await selected.resolve(link.url);

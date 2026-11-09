@@ -9,7 +9,7 @@ import { Lens } from "../../packages/core/service.js";
 const lens = new Lens(config());
 const server = new McpServer({
   name: "agent-media-lens",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 const taskId = z.uuid(),
   url = z.string().min(1).max(4096),
@@ -19,6 +19,7 @@ const windowFields = {
   start: z.number().nonnegative().optional(),
   end: z.number().nonnegative().optional(),
 };
+const page = z.int().min(1).max(120).optional();
 const window = z
   .object(windowFields)
   .refine(
@@ -45,7 +46,7 @@ server.registerTool(
   "media_resolve",
   {
     description:
-      "Resolve one public Douyin video URL and return normalized metadata.",
+      "Resolve one public Douyin video or photo album URL and return normalized metadata.",
     inputSchema: z.object({ url, provider }),
   },
   ({ url, provider }) =>
@@ -107,12 +108,12 @@ server.registerTool(
   "media_list_frames",
   {
     description: "List frame IDs and media timestamps in a time window.",
-    inputSchema: z.object(windowFields),
+    inputSchema: z.object({ ...windowFields, page }),
   },
   (a) =>
     call("list_frames", () => {
       window.parse(a);
-      return json(lens.frames(a.taskId, a.start, a.end));
+      return json(lens.frames(a.taskId, a.start, a.end, a.page));
     }),
 );
 server.registerTool(
@@ -122,6 +123,7 @@ server.registerTool(
       "Read one real JPEG by frameId or nearest timestamp in seconds.",
     inputSchema: z.object({
       taskId,
+      page,
       frameId: z
         .string()
         .regex(/^f\d{3}$/)
@@ -142,6 +144,7 @@ server.registerTool(
     description: "Read at most three timestamped JPEGs in one window.",
     inputSchema: z.object({
       ...windowFields,
+      page,
       limit: z.int().min(1).max(3).default(3),
     }),
   },
@@ -150,10 +153,10 @@ server.registerTool(
       window.parse(a);
       return {
         content: lens
-          .frames(a.taskId, a.start, a.end)
+          .frames(a.taskId, a.start, a.end, a.page)
           .slice(0, a.limit)
           .flatMap((f) => [
-            ...json({ id: f.id, timestamp: f.timestamp }).content,
+            ...json({ id: f.id, page: f.page, timestamp: f.timestamp }).content,
             lens.image(a.taskId, { frameId: f.id }),
           ]),
       };

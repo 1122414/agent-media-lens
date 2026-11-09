@@ -112,7 +112,19 @@ cli
       ),
     ),
   );
-cli.command("frames <id>").action((id) => show(service().frames(id)));
+cli
+  .command("frames <id>")
+  .option("--page <n>", "只看指定图集页码", Number)
+  .action((id, o) =>
+    show(
+      service().frames(
+        id,
+        undefined,
+        undefined,
+        z.int().positive().optional().parse(o.page),
+      ),
+    ),
+  );
 cli.command("result <id>").action((id) => show(service().result(id)));
 cli.command("cleanup").action(() => show(service().store.cleanup()));
 cli.hook("preAction", (_p, action) => {

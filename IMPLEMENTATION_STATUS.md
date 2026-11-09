@@ -6,6 +6,10 @@ The public repository uses Apache-2.0 and the main branch. Node 24.16, pnpm 11.5
 
 The [v0.1.0 report](docs/releases/v0.1.0.md) lists acceptance checks, installation steps and remaining platform limits. Local release checks passed with 38 TypeScript tests, two Python tests, the compiled Docker CLI and Codex plugin 0.1.0 installed and enabled. Public CI and release publication are recorded by GitHub Actions.
 
+## After v0.1.0
+
+Public Douyin albums now work through the same CLI and MCP entry points. The Jiuzhaigou share produced three live pages, nine JPEGs and nine page-linked OCR rows. The Origami note produced eight still pages with null timestamps. The original album inputs were removed in both cases. The album stage passed 41 TypeScript tests and two Python tests.
+
 ## Historical stage results
 
 Phase 1: workspace dependencies locked. Strict build, ESLint and provider tests passed. Native resolution of a real public short link identified a photo note. Live Evil0ctal authorization and video download remain pending. Compose and Colima are now available.

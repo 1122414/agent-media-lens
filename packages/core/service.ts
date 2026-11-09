@@ -26,7 +26,7 @@ const options = z
   );
 export type AnalyzeOptions = z.input<typeof options>;
 export interface Result extends Evidence {
-  schemaVersion: "1.0";
+  schemaVersion: "1.0" | "1.1";
   task: ReturnType<Store["task"]>;
   media: Media;
   provider: string;
@@ -56,47 +56,78 @@ export class Lens {
       controller = new AbortController();
     this.active.set(id, controller);
     let temporaryPlayback = false;
+    let album = false;
     const done = (async () => {
       try {
         this.store.stage(id, "RESOLVING");
-        const { media, stream, provider } = await this.io.resolve(
+        const { media, stream, provider, slides } = await this.io.resolve(
           c,
           source,
           c.provider,
         );
         controller.signal.throwIfAborted();
-        if (!stream)
-          throw new LensError(
-            "MEDIA_WITHHELD",
-            "作品详情可读，但访客未获得可用媒体",
-          );
-        temporaryPlayback =
-          media.rendition === "public_playback" ||
-          media.downloadPermission !== "allowed" ||
-          opts.discardOriginal;
-        const inputName = temporaryPlayback ? ".playback.mp4" : "source.mp4";
+        album = Boolean(slides);
         if (media.duration !== null && media.duration > c.maxSeconds)
           throw new LensError("DURATION_LIMIT", "超出视频时长限制");
-        this.store.stage(id, "DOWNLOADING");
-        const transfer = () =>
-          this.io.download(
+        temporaryPlayback =
+          !album &&
+          (media.rendition === "public_playback" ||
+            media.downloadPermission !== "allowed" ||
+            opts.discardOriginal);
+        const inputName = temporaryPlayback ? ".playback.mp4" : "source.mp4";
+        if (slides) {
+          if (opts.keepPlayback)
+            throw new LensError(
+              "UNSUPPORTED_OPTION",
+              "图集仅保留逐页 JPEG 和 OCR 证据",
+            );
+          const needed =
+            slides.length + 2 * slides.filter((slide) => slide.clip).length;
+          if (needed > c.maxFrames)
+            throw new LensError(
+              "FRAME_LIMIT",
+              "图集需要至少 " + needed + " 张证据图，请提高 maxFrames",
+            );
+          this.store.stage(id, "DOWNLOADING");
+          let remaining = c.maxBytes;
+          for (const [index, slide] of slides.entries()) {
+            const prefix = ".page-" + String(index + 1).padStart(3, "0");
+            const photo = this.store.file(id, prefix + ".img");
+            await this.transfer(
+              id,
+              slide.poster,
+              photo,
+              remaining,
+              controller.signal,
+              "photo",
+            );
+            remaining -= statSync(photo).size;
+            if (slide.clip) {
+              const clip = this.store.file(id, prefix + ".mp4");
+              await this.transfer(
+                id,
+                slide.clip,
+                clip,
+                remaining,
+                controller.signal,
+              );
+              remaining -= statSync(clip).size;
+            }
+          }
+        } else {
+          if (!stream)
+            throw new LensError(
+              "MEDIA_WITHHELD",
+              "作品详情可读，但访客未获得可用媒体",
+            );
+          this.store.stage(id, "DOWNLOADING");
+          await this.transfer(
+            id,
             stream,
             this.store.file(id, inputName),
             c.maxBytes,
             controller.signal,
           );
-        try {
-          await transfer();
-        } catch (err) {
-          if (
-            controller.signal.aborted ||
-            !["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"].includes(
-              (err as NodeJS.ErrnoException).code || "",
-            )
-          )
-            throw err;
-          this.store.stage(id, "DOWNLOADING", { retries: 1 });
-          await transfer();
         }
         const evidence = await this.io.worker(
           this.store.dir(id),
@@ -105,6 +136,7 @@ export class Lens {
           controller.signal,
           (pid) => this.store.trackWorker(id, pid),
           temporaryPlayback,
+          slides?.length,
         );
         controller.signal.throwIfAborted();
         const artifacts: Record<string, string> = {
@@ -131,13 +163,14 @@ export class Lens {
           "## Frame text",
           ...evidence.ocr.map(
             (o) =>
-              `- [${o.timestamp}s · ${o.frameId}] ${JSON.stringify(o.text)}`,
+              `- [${o.page ? "第 " + o.page + " 页 · " : ""}${o.timestamp == null ? "静态图" : o.timestamp + "s"} · ${o.frameId}] ${JSON.stringify(o.text)}`,
           ),
         ];
         writeFileSync(this.store.file(id, "analysis.md"), lines.join("\n"), {
           mode: 0o600,
         });
-        if (
+        if (album) this.store.clearAlbumInputs(id);
+        else if (
           opts.discardOriginal ||
           (media.downloadPermission !== "allowed" && !opts.keepPlayback)
         )
@@ -152,7 +185,7 @@ export class Lens {
         this.store.transaction(() => {
           const completed = this.store.stage(id, "COMPLETED", { artifacts });
           const result: Result = {
-            schemaVersion: "1.0",
+            schemaVersion: album ? "1.1" : "1.0",
             media: { ...media, duration: evidence.duration },
             provider,
             ...evidence,
@@ -167,8 +200,9 @@ export class Lens {
         });
       } catch (err) {
         let error = failure(err);
-        if (temporaryPlayback) {
+        if (album || temporaryPlayback) {
           try {
+            if (album) this.store.clearAlbumInputs(id);
             rmSync(this.store.file(id, ".playback.mp4"), { force: true });
             rmSync(this.store.file(id, "playback.mp4"), { force: true });
           } catch {
@@ -190,6 +224,32 @@ export class Lens {
     })();
     return { taskId: id, done };
   }
+  private async transfer(
+    id: string,
+    url: string,
+    path: string,
+    max: number,
+    signal: AbortSignal,
+    kind: "stream" | "photo" = "stream",
+  ) {
+    if (max <= 0) throw new LensError("SIZE_LIMIT", "作品超出大小限制");
+    const run = () => this.io.download(url, path, max, signal, kind);
+    try {
+      await run();
+    } catch (err) {
+      if (
+        signal.aborted ||
+        !["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"].includes(
+          (err as NodeJS.ErrnoException).code || "",
+        )
+      )
+        throw err;
+      this.store.stage(id, "DOWNLOADING", {
+        retries: this.store.task(id).retries + 1,
+      });
+      await run();
+    }
+  }
   cancelAll() {
     for (const c of this.active.values()) c.abort();
   }
@@ -200,13 +260,25 @@ export class Lens {
     const data = JSON.parse(
       readFileSync(this.store.file(id, "result.json"), "utf8"),
     );
-    if (data.schemaVersion !== "1.0")
+    if (data.schemaVersion !== "1.0" && data.schemaVersion !== "1.1")
       throw new LensError("SCHEMA_VERSION", "当前客户端不支持此版本，请升级");
     return { ...data, task, artifacts: task.artifacts ?? data.artifacts };
   }
-  frames(id: string, start = 0, end = Infinity) {
-    return this.result(id).frames.filter(
-      (f) => f.timestamp >= start && f.timestamp <= end,
+  frames(id: string, start?: number, end?: number, page?: number) {
+    const r = this.result(id);
+    if (
+      r.media.kind === "image_album" &&
+      page === undefined &&
+      (start !== undefined || end !== undefined)
+    )
+      throw new LensError("PAGE_REQUIRED", "图集的时间范围需要指定页码");
+    return r.frames.filter(
+      (f) =>
+        (page === undefined || f.page === page) &&
+        ((start === undefined && end === undefined) ||
+          (f.timestamp !== null &&
+            f.timestamp >= (start ?? 0) &&
+            f.timestamp <= (end ?? Infinity))),
     );
   }
   transcript(id: string, start = 0, end = Infinity, offset = 0, limit = 100) {
@@ -222,15 +294,23 @@ export class Lens {
         offset + segments.length < all.length ? offset + segments.length : null,
     };
   }
-  image(id: string, selector: { frameId?: string; timestamp?: number }) {
-    const frames = this.frames(id);
+  image(
+    id: string,
+    selector: { frameId?: string; timestamp?: number; page?: number },
+  ) {
+    const frames = this.frames(
+      id,
+      selector.timestamp === undefined ? undefined : 0,
+      undefined,
+      selector.page,
+    );
     const frame = selector.frameId
       ? frames.find((f) => f.id === selector.frameId)
       : frames.reduce<(typeof frames)[number] | undefined>(
           (near, f) =>
             !near ||
-            Math.abs(f.timestamp - selector.timestamp!) <
-              Math.abs(near.timestamp - selector.timestamp!)
+            Math.abs(f.timestamp! - selector.timestamp!) <
+              Math.abs(near.timestamp! - selector.timestamp!)
               ? f
               : near,
           undefined,

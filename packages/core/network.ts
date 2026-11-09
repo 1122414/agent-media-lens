@@ -16,7 +16,7 @@ const pages = [
 const cdns = ["douyinvod.com", "zjcdn.com", "douyin.com", "amemv.com"];
 export function checked(
   input: string,
-  kind: "page" | "stream",
+  kind: "page" | "stream" | "photo",
   redirectedFrom?: URL,
 ) {
   let u: URL;
@@ -29,10 +29,12 @@ export function checked(
   const allowed =
     kind === "page"
       ? pages.includes(host)
-      : cdns.some((d) => host === d || host.endsWith("." + d)) ||
-        (redirectedFrom?.protocol === "https:" &&
-          redirectedFrom.hostname.endsWith(".douyinvod.com") &&
-          /^[0-9a-f]{32}\.v\.smtcdns\.com$/.test(host));
+      : kind === "photo"
+        ? /^p[0-9]+-(?:pc-)?sign\.douyinpic\.com$/.test(host)
+        : cdns.some((d) => host === d || host.endsWith("." + d)) ||
+          (redirectedFrom?.protocol === "https:" &&
+            redirectedFrom.hostname.endsWith(".douyinvod.com") &&
+            /^[0-9a-f]{32}\.v\.smtcdns\.com$/.test(host));
   if (
     !allowed ||
     u.protocol !== "https:" ||
@@ -63,7 +65,7 @@ export function share(input: string) {
 }
 export async function fetchPublic(
   input: string,
-  kind: "page" | "stream",
+  kind: "page" | "stream" | "photo",
   signal: AbortSignal,
 ) {
   let url = checked(input, kind);
@@ -117,10 +119,11 @@ export async function download(
   path: string,
   max: number,
   signal?: AbortSignal,
+  kind: "stream" | "photo" = "stream",
 ) {
   const { res } = await fetchPublic(
     stream,
-    "stream",
+    kind,
     AbortSignal.any([AbortSignal.timeout(120000), ...(signal ? [signal] : [])]),
   );
   await saveDownload(res, path, max);

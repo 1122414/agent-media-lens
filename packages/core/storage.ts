@@ -70,6 +70,7 @@ export class Store {
         alive((process.platform === "win32" ? 1 : -1) * Number(row.worker))
       )
         continue;
+      this.clearAlbumInputs(String(row.id));
       rmSync(this.file(String(row.id), ".playback.mp4"), { force: true });
       rmSync(this.file(String(row.id), "playback.mp4"), { force: true });
       this.stage(String(row.id), "FAILED", {
@@ -98,7 +99,7 @@ export class Store {
   }
   file(id: string, name: string) {
     if (
-      !/^(source\.mp4|\.?playback\.mp4|audio\.wav|evidence\.json|result\.json|transcript\.json|analysis\.md|f\d{3}\.jpg)$/.test(
+      !/^(\.page-\d{3}\.(?:img|mp4)|source\.mp4|\.?playback\.mp4|audio\.wav|evidence\.json|result\.json|transcript\.json|analysis\.md|f\d{3}\.jpg)$/.test(
         name,
       )
     )
@@ -108,6 +109,13 @@ export class Store {
     if (entry && !entry.isFile())
       throw new LensError("UNSAFE_PATH", "任务文件无效");
     return p;
+  }
+  clearAlbumInputs(id: string) {
+    const dir = this.dir(id);
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir))
+      if (/^\.page-\d{3}\.(?:img|mp4)$/.test(name))
+        rmSync(this.file(id, name), { force: true });
   }
   task(id: string): Task {
     z.uuid().parse(id);

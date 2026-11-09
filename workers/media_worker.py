@@ -145,6 +145,45 @@ def choose_frames(samples: list[bytes], interval: float, maximum: int) -> list[i
     return sorted(selected)
 
 
+def write_frame(path: Path, image: Path, second: float | None) -> None:
+    if second is None:
+        # Force a single still-image demuxer. A file disguised as a playlist
+        # must never be able to open neighbouring files.
+        with path.open("rb") as source:
+            head = source.read(12)
+        if head.startswith(b"\xff\xd8\xff"):
+            demuxer = "jpeg_pipe"
+        elif head.startswith(b"\x89PNG\r\n\x1a\n"):
+            demuxer = "png_pipe"
+        elif head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+            demuxer = "webp_pipe"
+        else:
+            raise ValueError("INVALID_IMAGE")
+        args = ["-f", demuxer, "-protocol_whitelist", "file", "-max_pixels", "16777216"]
+    else:
+        args = ["-ss", str(second), *MEDIA_INPUT]
+    run(
+        [
+            *FFMPEG,
+            *args,
+            "-i",
+            str(path),
+            "-map",
+            "0:V:0",
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=w='min(960,iw)':h='min(960,ih)':force_original_aspect_ratio=decrease",
+            "-q:v",
+            "5",
+            "-n",
+            str(image),
+        ]
+    )
+    if not image.is_file() or not 0 < image.stat().st_size <= 512_000:
+        raise ValueError("IMAGE_LIMIT")
+
+
 def frames(
     path: Path, directory: Path, duration: float, interval: float, maximum: int
 ) -> list[dict[str, Any]]:
@@ -170,33 +209,86 @@ def frames(
     for n, second in enumerate(choose_frames(samples, interval, maximum)):
         name = f"f{n:03}"
         image = directory / (name + ".jpg")
-        run(
-            [
-                *FFMPEG,
-                "-ss",
-                str(second),
-                *MEDIA_INPUT,
-                "-i",
-                str(path),
-                "-map",
-                "0:V:0",
-                "-frames:v",
-                "1",
-                "-vf",
-                "scale=w='min(960,iw)':h='min(960,ih)':force_original_aspect_ratio=decrease",
-                "-q:v",
-                "5",
-                "-n",
-                str(image),
-            ]
-        )
-        if not image.is_file() or not 0 < image.stat().st_size <= 512_000:
-            raise ValueError("IMAGE_LIMIT")
+        write_frame(path, image, second)
         rows.append({"id": name, "timestamp": second, "imagePath": image.name})
     return rows
 
 
+def album_frames(
+    directory: Path, count: int, limit: int, max_frames: int
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    elapsed = 0.0
+    for page in range(1, count + 1):
+        prefix = f".page-{page:03}"
+        poster = directory / (prefix + ".img")
+        clip = directory / (prefix + ".mp4")
+        samples: list[tuple[Path, float | None]] = [(poster, None)]
+        if clip.exists():
+            duration, _ = probe(clip, limit)
+            elapsed += duration
+            if elapsed > limit:
+                raise ValueError("DURATION_LIMIT")
+            samples.extend([(clip, 0.0), (clip, duration * 0.65)])
+        if len(rows) + len(samples) > max_frames:
+            raise ValueError("IMAGE_LIMIT")
+        for source, second in samples:
+            name = f"f{len(rows):03}"
+            image = directory / (name + ".jpg")
+            write_frame(source, image, second)
+            rows.append(
+                {"id": name, "page": page, "timestamp": second, "imagePath": image.name}
+            )
+    return rows
+
+
+def read_ocr(
+    directory: Path, images: list[dict[str, Any]], language: str
+) -> list[dict[str, Any]]:
+    event("OCR")
+    ocr = []
+    for image in images:
+        text = (
+            run(
+                [
+                    "tesseract",
+                    str(directory / image["imagePath"]),
+                    "stdout",
+                    "-l",
+                    language,
+                    "--psm",
+                    "11",
+                ],
+                60,
+            )
+            .decode()
+            .strip()[:16000]
+        )
+        ocr.append(
+            {
+                **({"page": image["page"]} if "page" in image else {}),
+                "timestamp": image["timestamp"],
+                "frameId": image["id"],
+                "text": text,
+            }
+        )
+    return ocr
+
+
 def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
+    if options.album_pages:
+        if not 1 <= options.album_pages <= options.max_frames:
+            raise ValueError("IMAGE_LIMIT")
+        event("EXTRACTING_FRAMES")
+        images = album_frames(
+            directory, options.album_pages, options.max_seconds, options.max_frames
+        )
+        return {
+            "duration": None,
+            "transcript": {"language": None, "text": "", "segments": []},
+            "frames": images,
+            "ocr": read_ocr(directory, images, options.ocr_lang),
+        }
     path = directory / (".playback.mp4" if options.temporary_playback else "source.mp4")
     event("EXTRACTING_AUDIO")
     duration, audio = probe(path, options.max_seconds)
@@ -232,28 +324,7 @@ def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
         wav.unlink(missing_ok=True)
     event("EXTRACTING_FRAMES")
     images = frames(path, directory, duration, options.interval, options.max_frames)
-    event("OCR")
-    ocr = []
-    for image in images:
-        text = (
-            run(
-                [
-                    "tesseract",
-                    str(directory / image["imagePath"]),
-                    "stdout",
-                    "-l",
-                    options.ocr_lang,
-                    "--psm",
-                    "11",
-                ],
-                60,
-            )
-            .decode()
-            .strip()[:16000]
-        )
-        ocr.append(
-            {"timestamp": image["timestamp"], "frameId": image["id"], "text": text}
-        )
+    ocr = read_ocr(directory, images, options.ocr_lang)
     return {
         "duration": duration,
         "transcript": transcript,
@@ -271,6 +342,7 @@ def main() -> int:
         choices=["auto", "tiny", "base", "small", "medium", "large-v3"],
     )
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
+    parser.add_argument("--album-pages", type=int, default=0)
     parser.add_argument("--temporary-playback", action="store_true")
     parser.add_argument("--max-seconds", type=int, default=600)
     parser.add_argument("--interval", type=float, default=4)
@@ -296,7 +368,13 @@ def main() -> int:
         KeyError,
         subprocess.SubprocessError,
     ) as exc:
-        codes = {"DURATION_LIMIT", "INVALID_VIDEO", "IMAGE_LIMIT", "INVALID_OPTIONS"}
+        codes = {
+            "DURATION_LIMIT",
+            "INVALID_VIDEO",
+            "IMAGE_LIMIT",
+            "INVALID_OPTIONS",
+            "INVALID_IMAGE",
+        }
         code = (
             str(exc)
             if isinstance(exc, ValueError) and str(exc) in codes

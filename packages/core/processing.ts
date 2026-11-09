@@ -19,6 +19,7 @@ export function worker(
   signal: AbortSignal,
   trackWorker?: (pid: number) => void,
   temporaryPlayback = false,
+  albumPages = 0,
 ) {
   const script = join(projectRoot, "workers", "media_worker.py");
   const local = join(projectRoot, ".venv", "bin", "python");
@@ -33,6 +34,7 @@ export function worker(
       [
         script,
         dir,
+        ...(albumPages ? ["--album-pages", String(albumPages)] : []),
         ...(temporaryPlayback ? ["--temporary-playback"] : []),
         "--max-seconds",
         String(c.maxSeconds),
@@ -98,7 +100,12 @@ export function worker(
               .parse(msg.stage),
           );
         if (
-          ["DURATION_LIMIT", "INVALID_VIDEO", "IMAGE_LIMIT"].includes(msg.error)
+          [
+            "DURATION_LIMIT",
+            "INVALID_VIDEO",
+            "IMAGE_LIMIT",
+            "INVALID_IMAGE",
+          ].includes(msg.error)
         )
           error = msg.error;
       } catch {

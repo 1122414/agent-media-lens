@@ -26,12 +26,20 @@ export const mediaSchema = z.object({
   title: z.string().max(12000),
   author: z.string().max(512),
   duration: z.number().nonnegative().nullable(),
+  kind: z.enum(["video", "image_album"]).optional(),
+  pages: z
+    .array(
+      z.object({ page: z.int().positive(), kind: z.enum(["still", "live"]) }),
+    )
+    .max(120)
+    .optional(),
   downloadPermission: z.enum(["allowed", "disabled", "unknown"]).optional(),
   rendition: z.enum(["platform_download", "public_playback"]).optional(),
 });
 export type Media = z.infer<typeof mediaSchema>;
 export interface Candidate {
   media: Media;
+  slides?: { poster: string; clip?: string }[];
   stream: string | null;
 }
 export interface Provider {
@@ -53,7 +61,7 @@ export const stages = [
 ] as const;
 export type Stage = (typeof stages)[number];
 export const workerSchema = z.object({
-  duration: z.number().positive(),
+  duration: z.number().positive().nullable(),
   transcript: z.object({
     language: z.string().nullable(),
     text: z.string().max(500000),
@@ -71,7 +79,8 @@ export const workerSchema = z.object({
     .array(
       z.object({
         id: z.string().regex(/^f\d{3}$/),
-        timestamp: z.number().nonnegative(),
+        timestamp: z.number().nonnegative().nullable(),
+        page: z.int().positive().optional(),
         imagePath: z.string().regex(/^f\d{3}\.jpg$/),
       }),
     )
@@ -80,7 +89,8 @@ export const workerSchema = z.object({
     .array(
       z.object({
         frameId: z.string(),
-        timestamp: z.number().nonnegative(),
+        timestamp: z.number().nonnegative().nullable(),
+        page: z.int().positive().optional(),
         text: z.string().max(16000),
       }),
     )

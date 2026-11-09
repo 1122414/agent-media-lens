@@ -1,7 +1,7 @@
 {
   "name": "agent-media-lens",
-  "version": "0.1.0",
-  "description": "Understand public Douyin videos locally using timestamped speech, OCR and on-demand frames.",
+  "version": "0.2.0",
+  "description": "Understand public Douyin videos and photo albums locally using timestamped speech, OCR and on-demand frames.",
   "author": {
     "name": "AgentMediaLens contributors"
   },
@@ -11,7 +11,7 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "AgentMediaLens",
-    "shortDescription": "Understand public Douyin videos locally",
+    "shortDescription": "Understand public Douyin videos and photo albums locally",
     "category": "Productivity"
   }
 }

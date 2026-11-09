@@ -29,3 +29,5 @@ With the Evil0ctal provider selected, `media-lens doctor` checks three things in
 | `PUBLIC_DOWNLOAD_UNCONFIRMED`, `CONTENT_PRIVATE`, `MEDIA_WITHHELD` | Verify explicit public status. Resolve can return metadata when the guest has no usable media address; analysis then reports MEDIA_WITHHELD. |
 
 The same recognized refusal is reported whether the v5 API answers immediately or queues a task. The upstream message, details, raw response and signed media URLs are never copied into that error.
+
+For photo notes and slides, the same detail endpoint returns an image_album. Validate the public status and each ordered page. Download the poster using the Douyin signed-photo CDN policy and any page-level live clip through the existing video CDN policy. The post-level video may be background music. JPEG, PNG and WebP posters are decoded as still images, and the raw pages are deleted after processing.
