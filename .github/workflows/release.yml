@@ -3,6 +3,7 @@ on:
   push:
     tags: ['v*']
 permissions:
+  actions: read
   contents: write
 jobs:
   publish:
