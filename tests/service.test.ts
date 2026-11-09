@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { configSchema } from "../packages/core/config.js";
 import { Lens } from "../packages/core/service.js";
 import { worker } from "../packages/core/processing.js";
@@ -28,6 +28,7 @@ afterEach(() => {
 const url = "https://www.douyin.com/video/123456789";
 it("processes a real silent clip, reads evidence, guards active files and expires originals", async () => {
   const c = settings();
+  let attempts = 0;
   const lens = new Lens(c, {
     resolve: async () => ({
       media: {
@@ -42,6 +43,10 @@ it("processes a real silent clip, reads evidence, guards active files and expire
       provider: "test",
     }),
     download: async (_u, path) => {
+      if (attempts++ === 0)
+        throw Object.assign(new Error("connection reset"), {
+          code: "ECONNRESET",
+        });
       execFileSync("ffmpeg", [
         "-v",
         "error",
@@ -61,6 +66,7 @@ it("processes a real silent clip, reads evidence, guards active files and expire
   expect(() => lens.start(url)).toThrow("并发");
   expect(lens.store.cleanup().removed).toBe(0);
   expect((await done).status).toBe("COMPLETED");
+  expect(lens.store.task(taskId).retries).toBe(1);
   expect(lens.transcript(taskId).total).toBe(0);
   expect(lens.frames(taskId).length).toBeGreaterThan(0);
   expect(
@@ -91,4 +97,29 @@ it("rejects traversal and records a provider failure", async () => {
   const job = lens.start(url, { provider: "native" });
   expect((await job.done).error?.code).toBe("NATIVE_UNSUPPORTED");
   expect(() => lens.result(job.taskId)).toThrow();
+});
+
+it("recovers abandoned tasks while protecting an active worker group", () => {
+  const c = settings(),
+    store = new Store(c);
+  stores.push(store);
+  const job = store.create();
+  store.db
+    .prepare("UPDATE tasks SET pid=? WHERE id=?")
+    .run(2147483647, job.taskId);
+  // A fresh process group stands in for the orphan worker during parent recovery.
+  const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+    detached: true,
+    stdio: "ignore",
+  });
+  try {
+    store.trackWorker(job.taskId, child.pid!);
+    store.cleanup();
+    expect(store.task(job.taskId).status).toBe("PENDING");
+    store.trackWorker(job.taskId, 2147483647);
+    store.cleanup();
+    expect(store.task(job.taskId).error?.code).toBe("INTERRUPTED");
+  } finally {
+    child.kill();
+  }
 });

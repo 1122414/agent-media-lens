@@ -116,6 +116,14 @@ export async function download(
     "stream",
     AbortSignal.any([AbortSignal.timeout(120000), ...(signal ? [signal] : [])]),
   );
+  await saveDownload(res, path, max);
+}
+/** Persist a validated HTTP response under the task byte ceiling. */
+export async function saveDownload(
+  res: import("node:http").IncomingMessage,
+  path: string,
+  max: number,
+) {
   if (Number(res.headers["content-length"]) > max) {
     res.destroy();
     throw new LensError("SIZE_LIMIT", "视频超出大小限制");

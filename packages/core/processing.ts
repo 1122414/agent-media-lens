@@ -17,6 +17,7 @@ export function worker(
   c: Config,
   onStage: (s: Stage) => void,
   signal: AbortSignal,
+  trackWorker?: (pid: number) => void,
 ) {
   const script = join(projectRoot, "workers", "media_worker.py");
   const local = join(projectRoot, ".venv", "bin", "python");
@@ -61,6 +62,13 @@ export function worker(
         } catch {
           /* already exited */
         }
+      }
+    }
+    if (child.pid) {
+      try {
+        trackWorker?.(child.pid);
+      } catch {
+        stop();
       }
     }
     const timer = setTimeout(() => {

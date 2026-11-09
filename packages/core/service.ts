@@ -55,17 +55,32 @@ export class Lens {
         if (media.duration !== null && media.duration > c.maxSeconds)
           throw new LensError("DURATION_LIMIT", "超出视频时长限制");
         this.store.stage(id, "DOWNLOADING");
-        await this.io.download(
-          stream,
-          this.store.file(id, "source.mp4"),
-          c.maxBytes,
-          controller.signal,
-        );
+        const transfer = () =>
+          this.io.download(
+            stream,
+            this.store.file(id, "source.mp4"),
+            c.maxBytes,
+            controller.signal,
+          );
+        try {
+          await transfer();
+        } catch (err) {
+          if (
+            controller.signal.aborted ||
+            !["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"].includes(
+              (err as NodeJS.ErrnoException).code || "",
+            )
+          )
+            throw err;
+          this.store.stage(id, "DOWNLOADING", { retries: 1 });
+          await transfer();
+        }
         const evidence = await this.io.worker(
           this.store.dir(id),
           c,
           (s) => this.store.stage(id, s),
           controller.signal,
+          (pid) => this.store.trackWorker(id, pid),
         );
         controller.signal.throwIfAborted();
         const artifacts = {
@@ -117,12 +132,21 @@ export class Lens {
           );
         });
       } catch (err) {
-        if (opts.discardOriginal)
-          rmSync(this.store.file(id, "source.mp4"), { force: true });
+        let error = failure(err);
+        if (opts.discardOriginal) {
+          try {
+            rmSync(this.store.file(id, "source.mp4"), { force: true });
+          } catch {
+            error = {
+              code: "CLEANUP_FAILED",
+              message: "清理原片失败，请检查缓存目录",
+            };
+          }
+        }
         this.store.stage(
           id,
           controller.signal.aborted ? "CANCELLED" : "FAILED",
-          { error: failure(err) },
+          { error },
         );
       } finally {
         this.active.delete(id);

@@ -38,20 +38,41 @@ export class Store {
     this.db.exec(
       "PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY,pid INTEGER NOT NULL,active INTEGER NOT NULL,body TEXT NOT NULL);",
     );
-    this.transaction(() => {
-      for (const row of this.db
-        .prepare("SELECT id,pid FROM tasks WHERE active=1")
-        .all()) {
-        try {
-          process.kill(Number(row.pid), 0);
-        } catch (e) {
-          if ((e as NodeJS.ErrnoException).code === "ESRCH")
-            this.stage(String(row.id), "FAILED", {
-              error: { code: "INTERRUPTED", message: "处理进程已退出" },
-            });
-        }
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS worker_owners (id TEXT PRIMARY KEY, pid INTEGER NOT NULL)",
+    );
+    this.transaction(() => this.recover());
+  }
+  trackWorker(id: string, pid: number) {
+    this.db
+      .prepare("INSERT OR REPLACE INTO worker_owners VALUES(?,?)")
+      .run(id, pid);
+  }
+  private recover() {
+    const alive = (pid: number) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (e) {
+        return (e as NodeJS.ErrnoException).code !== "ESRCH";
       }
-    });
+    };
+    const rows = this.db
+      .prepare(
+        "SELECT t.id,t.pid,w.pid AS worker FROM tasks t LEFT JOIN worker_owners w ON t.id=w.id WHERE t.active=1",
+      )
+      .all();
+    for (const row of rows) {
+      if (alive(Number(row.pid))) continue;
+      if (
+        row.worker &&
+        alive((process.platform === "win32" ? 1 : -1) * Number(row.worker))
+      )
+        continue;
+      this.stage(String(row.id), "FAILED", {
+        error: { code: "INTERRUPTED", message: "处理进程已退出" },
+      });
+    }
   }
   transaction<T>(fn: () => T) {
     this.db.exec("BEGIN IMMEDIATE");
@@ -93,6 +114,7 @@ export class Store {
   }
   cleanup() {
     return this.transaction(() => {
+      this.recover();
       let removed = 0;
       for (const row of this.db
         .prepare("SELECT id FROM tasks WHERE active=0")
@@ -152,7 +174,7 @@ export class Store {
   stage(
     id: string,
     status: Stage,
-    extra: Partial<Pick<Task, "error" | "artifacts">> = {},
+    extra: Partial<Pick<Task, "error" | "artifacts" | "retries">> = {},
   ) {
     const task = this.task(id);
     if (terminal.includes(task.status)) return task;
@@ -163,7 +185,10 @@ export class Store {
     task.status = status;
     Object.assign(task, extra);
     const done = terminal.includes(status);
-    if (done) task.completedAt = now;
+    if (done) {
+      task.completedAt = now;
+      this.db.prepare("DELETE FROM worker_owners WHERE id=?").run(id);
+    }
     this.db
       .prepare("UPDATE tasks SET body=?,active=? WHERE id=?")
       .run(JSON.stringify(task), done ? 0 : 1, id);
