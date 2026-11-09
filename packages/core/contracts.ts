@@ -26,11 +26,13 @@ export const mediaSchema = z.object({
   title: z.string().max(12000),
   author: z.string().max(512),
   duration: z.number().nonnegative().nullable(),
+  downloadPermission: z.enum(["allowed", "disabled", "unknown"]).optional(),
+  rendition: z.enum(["platform_download", "public_playback"]).optional(),
 });
 export type Media = z.infer<typeof mediaSchema>;
 export interface Candidate {
   media: Media;
-  stream: string;
+  stream: string | null;
 }
 export interface Provider {
   name: string;

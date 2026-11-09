@@ -1,4 +1,10 @@
-import { readFileSync, writeFileSync, statSync, rmSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  statSync,
+  rmSync,
+  renameSync,
+} from "node:fs";
 import { z } from "zod";
 import { configSchema, type Config } from "./config.js";
 import { failure, LensError, type Media, type Evidence } from "./contracts.js";
@@ -6,12 +12,18 @@ import { share, download } from "./network.js";
 import { resolveMedia } from "./providers.js";
 import { worker } from "./processing.js";
 import { Store } from "./storage.js";
-const options = z.strictObject({
-  discardOriginal: z.boolean().default(false),
-  provider: configSchema.shape.provider.removeDefault().optional(),
-  maxFrames: configSchema.shape.maxFrames.removeDefault().optional(),
-  model: configSchema.shape.model.removeDefault().optional(),
-});
+const options = z
+  .strictObject({
+    discardOriginal: z.boolean().default(false),
+    keepPlayback: z.boolean().default(false),
+    provider: configSchema.shape.provider.removeDefault().optional(),
+    maxFrames: configSchema.shape.maxFrames.removeDefault().optional(),
+    model: configSchema.shape.model.removeDefault().optional(),
+  })
+  .refine(
+    (o) => !(o.keepPlayback && o.discardOriginal),
+    "保留播放副本与处理后删除不能同时指定",
+  );
 export type AnalyzeOptions = z.input<typeof options>;
 export interface Result extends Evidence {
   schemaVersion: "1.0";
@@ -43,6 +55,7 @@ export class Lens {
       id = task.taskId,
       controller = new AbortController();
     this.active.set(id, controller);
+    let temporaryPlayback = false;
     const done = (async () => {
       try {
         this.store.stage(id, "RESOLVING");
@@ -52,13 +65,23 @@ export class Lens {
           c.provider,
         );
         controller.signal.throwIfAborted();
+        if (!stream)
+          throw new LensError(
+            "MEDIA_WITHHELD",
+            "作品详情可读，但访客未获得可用媒体",
+          );
+        temporaryPlayback =
+          media.rendition === "public_playback" ||
+          media.downloadPermission !== "allowed" ||
+          opts.discardOriginal;
+        const inputName = temporaryPlayback ? ".playback.mp4" : "source.mp4";
         if (media.duration !== null && media.duration > c.maxSeconds)
           throw new LensError("DURATION_LIMIT", "超出视频时长限制");
         this.store.stage(id, "DOWNLOADING");
         const transfer = () =>
           this.io.download(
             stream,
-            this.store.file(id, "source.mp4"),
+            this.store.file(id, inputName),
             c.maxBytes,
             controller.signal,
           );
@@ -81,9 +104,10 @@ export class Lens {
           (s) => this.store.stage(id, s),
           controller.signal,
           (pid) => this.store.trackWorker(id, pid),
+          temporaryPlayback,
         );
         controller.signal.throwIfAborted();
-        const artifacts = {
+        const artifacts: Record<string, string> = {
           metadataPath: "result.json",
           transcriptPath: "transcript.json",
           analysisPath: "analysis.md",
@@ -113,8 +137,18 @@ export class Lens {
         writeFileSync(this.store.file(id, "analysis.md"), lines.join("\n"), {
           mode: 0o600,
         });
-        if (opts.discardOriginal)
-          rmSync(this.store.file(id, "source.mp4"), { force: true });
+        if (
+          opts.discardOriginal ||
+          (media.downloadPermission !== "allowed" && !opts.keepPlayback)
+        )
+          rmSync(this.store.file(id, inputName), { force: true });
+        else if (temporaryPlayback) {
+          renameSync(
+            this.store.file(id, inputName),
+            this.store.file(id, "playback.mp4"),
+          );
+          artifacts.playbackPath = "playback.mp4";
+        } else artifacts.sourcePath = "source.mp4";
         this.store.transaction(() => {
           const completed = this.store.stage(id, "COMPLETED", { artifacts });
           const result: Result = {
@@ -133,9 +167,10 @@ export class Lens {
         });
       } catch (err) {
         let error = failure(err);
-        if (opts.discardOriginal) {
+        if (temporaryPlayback) {
           try {
-            rmSync(this.store.file(id, "source.mp4"), { force: true });
+            rmSync(this.store.file(id, ".playback.mp4"), { force: true });
+            rmSync(this.store.file(id, "playback.mp4"), { force: true });
           } catch {
             error = {
               code: "CLEANUP_FAILED",
@@ -159,14 +194,15 @@ export class Lens {
     for (const c of this.active.values()) c.abort();
   }
   result(id: string): Result {
-    if (this.store.task(id).status !== "COMPLETED")
+    const task = this.store.task(id);
+    if (task.status !== "COMPLETED")
       throw new LensError("NOT_READY", "任务尚无可读结果");
     const data = JSON.parse(
       readFileSync(this.store.file(id, "result.json"), "utf8"),
     );
     if (data.schemaVersion !== "1.0")
       throw new LensError("SCHEMA_VERSION", "当前客户端不支持此版本，请升级");
-    return data;
+    return { ...data, task, artifacts: task.artifacts ?? data.artifacts };
   }
   frames(id: string, start = 0, end = Infinity) {
     return this.result(id).frames.filter(

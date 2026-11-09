@@ -197,7 +197,7 @@ def frames(
 
 
 def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
-    path = directory / "source.mp4"
+    path = directory / (".playback.mp4" if options.temporary_playback else "source.mp4")
     event("EXTRACTING_AUDIO")
     duration, audio = probe(path, options.max_seconds)
     transcript: dict[str, Any] = {"language": None, "text": "", "segments": []}
@@ -271,6 +271,7 @@ def main() -> int:
         choices=["auto", "tiny", "base", "small", "medium", "large-v3"],
     )
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
+    parser.add_argument("--temporary-playback", action="store_true")
     parser.add_argument("--max-seconds", type=int, default=600)
     parser.add_argument("--interval", type=float, default=4)
     parser.add_argument("--max-frames", type=int, default=30)

@@ -5,6 +5,7 @@ import {
   utimesSync,
   existsSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,6 +34,7 @@ it("processes a real silent clip, reads evidence, guards active files and expire
     resolve: async () => ({
       media: {
         platform: "douyin",
+        downloadPermission: "allowed",
         id: "123456789",
         sourceUrl: url,
         title: "Test clip",
@@ -75,9 +77,11 @@ it("processes a real silent clip, reads evidence, guards active files and expire
       .toString("hex"),
   ).toBe("ffd8");
   const path = lens.store.file(taskId, "source.mp4");
+  expect(lens.result(taskId).artifacts.sourcePath).toBe("source.mp4");
   utimesSync(path, new Date(0), new Date(0));
   expect(lens.store.cleanup().removed).toBe(1);
   expect(existsSync(path)).toBe(false);
+  expect(lens.result(taskId).artifacts.sourcePath).toBeUndefined();
   expect(lens.result(taskId).schemaVersion).toBe("1.0");
   const ephemeral = lens.start(url, { discardOriginal: true });
   expect((await ephemeral.done).status).toBe("COMPLETED");
@@ -90,6 +94,85 @@ it("processes a real silent clip, reads evidence, guards active files and expire
   );
   expect(() => lens.store.file(taskId, "audio.wav")).toThrow("任务文件无效");
 }, 20000);
+it("keeps an authorized playback copy on request and expires it independently of evidence", async () => {
+  const lens = new Lens(settings(), {
+    resolve: async () => ({
+      provider: "test",
+      stream: "public-playback",
+      media: {
+        platform: "douyin",
+        id: "123456789",
+        sourceUrl: url,
+        title: "Test",
+        author: "Test",
+        duration: 2,
+        downloadPermission: "disabled",
+        rendition: "public_playback",
+      },
+    }),
+    download: async (_url, path) => {
+      writeFileSync(path, "guest rendition");
+    },
+    worker: async () => ({
+      duration: 2,
+      transcript: { language: null, text: "", segments: [] },
+      frames: [],
+      ocr: [],
+    }),
+  });
+  stores.push(lens.store);
+  expect(() =>
+    lens.start(url, { keepPlayback: true, discardOriginal: true }),
+  ).toThrow();
+  const ephemeral = lens.start(url);
+  expect((await ephemeral.done).status).toBe("COMPLETED");
+  expect(lens.result(ephemeral.taskId).artifacts.playbackPath).toBeUndefined();
+  expect(existsSync(lens.store.file(ephemeral.taskId, ".playback.mp4"))).toBe(
+    false,
+  );
+  const job = lens.start(url, { keepPlayback: true });
+  expect((await job.done).status).toBe("COMPLETED");
+  const result = lens.result(job.taskId);
+  expect(result.artifacts.playbackPath).toBe("playback.mp4");
+  expect(result.artifacts.sourcePath).toBeUndefined();
+  const path = lens.store.file(job.taskId, result.artifacts.playbackPath);
+  utimesSync(path, new Date(0), new Date(0));
+  expect(lens.store.cleanup().removed).toBe(1);
+  expect(lens.result(job.taskId).artifacts.playbackPath).toBeUndefined();
+});
+it("returns public metadata and never retains a playback-only input after decoder failure", async () => {
+  const c = settings();
+  const lens = new Lens(c, {
+    resolve: async () => ({
+      provider: "test",
+      stream: "public-playback",
+      media: {
+        platform: "douyin",
+        id: "123456789",
+        sourceUrl: url,
+        title: "Test",
+        author: "Test",
+        duration: 2,
+        downloadPermission: "disabled",
+      },
+    }),
+    download: async (_url, file) => {
+      expect(file.endsWith("/.playback.mp4")).toBe(true);
+      writeFileSync(file, "partial");
+    },
+    worker: async () => {
+      throw new Error("decode failure");
+    },
+  });
+  stores.push(lens.store);
+  const metadata = await lens.resolve(url);
+  expect(metadata.media.downloadPermission).toBe("disabled");
+  expect(metadata).not.toHaveProperty("stream");
+  const job = lens.start(url);
+  expect((await job.done).status).toBe("FAILED");
+  for (const name of [".playback.mp4", "source.mp4"])
+    expect(existsSync(lens.store.file(job.taskId, name))).toBe(false);
+});
 it("rejects traversal and records a provider failure", async () => {
   const lens = new Lens(settings());
   stores.push(lens.store);
@@ -108,6 +191,10 @@ it("recovers abandoned tasks while protecting an active worker group", () => {
     .prepare("UPDATE tasks SET pid=? WHERE id=?")
     .run(2147483647, job.taskId);
   // A fresh process group stands in for the orphan worker during parent recovery.
+  writeFileSync(
+    store.file(job.taskId, ".playback.mp4"),
+    "partial guest playback",
+  );
   const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
     detached: true,
     stdio: "ignore",
@@ -119,6 +206,7 @@ it("recovers abandoned tasks while protecting an active worker group", () => {
     store.trackWorker(job.taskId, 2147483647);
     store.cleanup();
     expect(store.task(job.taskId).error?.code).toBe("INTERRUPTED");
+    expect(existsSync(store.file(job.taskId, ".playback.mp4"))).toBe(false);
   } finally {
     child.kill();
   }

@@ -6,6 +6,22 @@ Provider fixtures cover URL validation, explicit public/download permission, v5 
 
 A separate manual acceptance used generated Mandarin and English speech with different slides, CPU base and installed Tesseract language packs. English returned the settings and save instructions at 0–4s. Mandarin returned the corresponding spoken instructions at 0–6.8s. A fresh Codex CLI session retrieved the English transcript, read f000 as image content, correctly described white background and black lettering and saved a timestamped report. These runs never fetched a live platform video.
 
-For live acceptance, use a rights-cleared public video with creator downloads enabled. Run identify, resolve and analyze on a fresh cache. Recheck metadata against the share page, inspect the transcript and at least one returned image, and save the report through Codex. Run separately on an expired link, a photo note and a private or restricted item. Record sanitized outcomes, never media, signed URLs or keys.
+For live acceptance, use public videos you may analyze. Exercise the platform-download and public-playback branches separately, including an authorized playback copy and one-shot disposal. Run identify, resolve and analyze on a fresh cache. Recheck metadata against the share page, inspect the transcript and at least one returned image, and save the report through Codex. Run separately on an expired link, a photo note and a private or restricted item. Record sanitized outcomes, never media, signed URLs or keys.
 
 The installed client called media_get_task, media_get_result, media_get_transcript, media_list_frames, media_get_frame and media_save_analysis. Its frame response contained MCP image content. A direct read of the resulting Markdown confirmed the cited speech and image observations.
+
+## Live acceptance on 2026-11-09
+
+English and Mandarin were tested through a local, guest-only Evil0ctal 5.1.11 deployment, CPU base ASR and Tesseract chi_sim+eng. Each row is a separate real source or explicit failure input. Counts describe outputs, not transcript accuracy. Do not commit the resulting media, signed links or credentials.
+
+| Case | Input and evidence | Observed result |
+|---|---|---|
+| Chinese speech, subtitles, technical tutorial | [Creator’s Spring Boot / Vue administration demo](https://www.douyin.com/video/7422312100527148322) | 563.7 s, zh, 32 speech segments, 12 frames, 12 nonempty OCR rows. OCR identifies the framework names. Several technical terms are mistranscribed. |
+| English speech | [English vocabulary lesson](https://www.douyin.com/video/7545769396452379939) | 365.444 s, en, 142 speech segments, 10 frames, 9 nonempty OCR rows. The transcript begins with the unit heading and spoken vocabulary. |
+| No spoken narration, save enabled | [Creator-offered green-screen footage](https://www.douyin.com/video/7222146097379134758) | 19.526 s, 0 segments, 10 frames and 8 nonempty OCR rows. The platform download file contained 768,272 bytes. |
+| Rapid visual changes, Chinese music, save disabled | Tester-supplied public share, repeated in independent CLI and installed Codex sessions | 28.001 s, 4 segments, 12 frames, 12 nonempty OCR rows. The client cited the street at 0 s and the dark underwater scene at 13 s. It identified uncertainty in the sung words and wrote a report. A separate keepPlayback run retained a 1920×1080 H.264/AAC playback copy. Default analysis left no MP4. |
+| Unavailable video | Canonical video path with nonexistent ID 9999999999999999999 | Live provider returned NOT_FOUND, CLI exit 1. |
+| Photo share | Tester-supplied public note | Short link identified the note. Video resolve returned UNSUPPORTED_MEDIA. |
+| Invalid input | `media-lens identify file:///tmp/a` | INVALID_URL, exit 2 before any platform request. |
+
+The underlying platform can revoke public access or change rendition delivery. Rerun with an authorized equivalent if a listed sample becomes unavailable. Private and deleted flags are also covered by isolated provider tests.

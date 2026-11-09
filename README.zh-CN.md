@@ -1,6 +1,6 @@
 # AgentMediaLens
 
-面向 AI Agent 的本地多媒体理解基础设施。输入公开抖音作品链接，获得带时间戳的逐字稿、关键帧、画面文字和 Markdown 分析。当前处于开发版。已用独立 Codex 客户端验证了合成教程的图像读取和语音分析。真实平台视频验收进度见[实施状态](IMPLEMENTATION_STATUS.md)。
+面向 AI Agent 的本地多媒体理解基础设施。输入公开抖音作品链接，获得带时间戳的逐字稿、关键帧、画面文字和 Markdown 分析。已用独立 Codex 客户端分析一条 28 秒的真实作品，读到实际图片并写出带时间戳的报告。中文软件教程、英文口播和无口播素材也已在真实平台验证。详见[实施状态](IMPLEMENTATION_STATUS.md)。
 
 [English](README.md) · [架构图和模块关系](ARCHITECTURE.md) · [技术选型](TECH_STACK.md)
 
@@ -28,7 +28,7 @@ export PATH="$HOME/.local/bin:$PATH"
 media-lens doctor
 ```
 
-按[采集服务说明](docs/providers/douyin.md)启动独立的 Evil0ctal v5，给本地进程设置 EVIL0CTAL_ENDPOINT 和 EVIL0CTAL_API_KEY。如果 Evil0ctal 不可达、密钥缺失或无权限，或抖音身份池没有可调度身份，doctor 返回退出码 1。检查通过只说明本机配置可用，具体作品仍需验证下载权限。可先运行 identify 识别分享链接。
+按[采集服务说明](docs/providers/douyin.md)启动独立的 Evil0ctal v5，给本地进程设置 EVIL0CTAL_ENDPOINT 和 EVIL0CTAL_API_KEY。如果 Evil0ctal 不可达、密钥缺失或无权限，或抖音身份池没有可调度身份，doctor 返回退出码 1。检查通过只说明本机配置可用，具体作品仍要检查访客能否读取详情和媒体。可先运行 identify 识别分享链接。
 
 ## CLI、插件与容器
 
@@ -69,7 +69,7 @@ docker compose -f compose.yaml -f compose.local-provider.yaml run --rm -T lens d
 - 单次分析可加 --discard-original，处理结束即清理原片；MCP 对应字段为 discardOriginal。
 - 初始抽帧间隔 4 秒，上限 30 帧；普通 CPU 默认 base/int8。可设置 interval、maxFrames、model、device 和 ocrLang。字段与默认值见[英文配置表](README.md)。
 - 遇到图文作品，identify 可返回 ID，视频分析会返回 UNSUPPORTED_MEDIA。原生适配器目前可解析链接，元数据和下载依赖外部服务。
-- 作品可观看但不可下载时，适配器会拒绝继续。状态缺失、私密、服务凭证失效或访问限制均可能阻止采集。切勿把密钥、Cookie 和原始媒体提交到仓库。
+- 抖音关闭「保存本地」时，仍可分析访客正常观看的播放流。需要保留有权保存的副本时，运行 `media-lens analyze "$SHARE_URL" --keep-playback`，或在 MCP 传 `keepPlayback: true`。结果里的 `playbackPath` 指向播放版本，`sourcePath` 指向平台提供的下载版本，路径均相对于任务目录。只有公开详情时可用 resolve 读元数据。私密、已删除、需要登录或平台拒绝访问的作品会返回错误。
 - 每个任务的 UUID 目录保存 result.json、transcript.json、关键帧和 analysis.md。结构化结果可按时间和帧 ID 追溯。
 
 [接口文档](docs/architecture/data-contracts.md) · [路线图](ROADMAP.md) · [参与贡献](CONTRIBUTING.md) · [许可证](LICENSE)

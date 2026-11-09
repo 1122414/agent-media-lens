@@ -2,4 +2,6 @@
 
 [Passing decoded audio into ASR](patterns/asr-pcm.md) applies when FFmpeg succeeds but transcription fails opening the WAV. Verified with English and Mandarin clips on the same locked stack.
 
-[Separating API readiness, guest capacity and video access](patterns/provider-readiness.md) applies when health checks pass but real Douyin resolution fails. One live v5 request was traced to a signature refusal with an incomplete guest identity. Error transport and capacity boundaries are regression-tested offline.
+[Separating API readiness, guest capacity and video access](patterns/provider-readiness.md) applies when health checks pass but real Douyin resolution fails. A live signature refusal was traced to an incomplete guest identity. A complete guest then obtained the same post. Both save-enabled and playback-only delivery were verified. Error transport and capacity boundaries are regression-tested offline.
+
+[Media CDN redirects](patterns/media-cdn-redirect.md) applies when a verified platform download is rejected during transfer. The precise redirect shape was exercised twice on one live post and tested against unrelated origins.

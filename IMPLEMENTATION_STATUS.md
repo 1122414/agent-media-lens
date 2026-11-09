@@ -1,8 +1,8 @@
 # Implementation status
 
-Public repository, default branch main and Apache-2.0 verified. Phase 0 source inspection is complete. Node 24.16, pnpm 11.5, Python 3.12.7, FFmpeg 8.1.1, Git and GitHub CLI are available. Docker CLI is installed, the Compose plugin is missing and Colima is stopped. A local faster-whisper base model cache exists.
+The public repository uses Apache-2.0 and the main branch. Node 24.16, pnpm 11.5, Python 3.12.7, FFmpeg 8.1.1, Tesseract, Docker on Colima, standalone Compose and the local CPU Whisper base model were used on the development Mac.
 
-**Current release gate (2026-11-09):** the local Evil0ctal API accepted the read key and the guest import. An authorized test link resolved to a public video and played in a fresh guest browser (28 seconds). The v5 API returned `UPSTREAM_RISK_CONTROL`. Its request log recorded a native-signed detail request, HTTP 403 and `signature.refused`. The imported guest lacked the native signer’s visitor ID. The request stopped before any creator download-permission check. No video was downloaded and no transcript, frames, OCR or Markdown were produced for it. Positive live acquisition remains unverified; v0.1.0 is untagged.
+**2026-11-09 verification.** The local Evil0ctal 5.1.11 service returned public details through a complete anonymous guest. The CLI saved a 19.526-second platform download. A separate 28.001-second video had its save button disabled. It completed transcript, frame and OCR processing, and an installed Codex client read actual JPEGs and saved a cited report. An authorized playback export decoded as 1920×1080 H.264/AAC. The English voice lesson and Mandarin software tutorial completed against the actual provider. See [test cases](docs/development/testing.md).
 
 The following entries record earlier stage results.
 

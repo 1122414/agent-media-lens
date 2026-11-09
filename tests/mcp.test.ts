@@ -17,6 +17,7 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       resolve: async () => ({
         media: {
           platform: "douyin",
+          downloadPermission: "allowed",
           sourceUrl: url,
           id: "123456789",
           author: "Test",

@@ -15,7 +15,7 @@ Evil0ctal also has its own download API, `POST /api/v1/downloads`. For a new pos
 
 On v5.1.11, the import preview's `usable` flag checks minimum import requirements. Before testing a new deployment, use the local console's identity view to check the guest's **session quality**. A manually imported guest can be active while missing the visitor ID needed by the native signer. If a details request fails with `UPSTREAM_RISK_CONTROL`, inspect its existing request log. HTTP 403 with rule `signature.refused` identifies a signing failure before the adapter can check the work's download permission. The upstream [guest identity guide](https://github.com/Evil0ctal/Douyin_TikTok_Download_API/blob/d44264e96cae55a6df341ed4a0b81b3e2d1fbcaf/documents/en/06-identities-and-proxies.md) describes session quality and the platform-issued visitor ID.
 
-For each canonical video, the adapter calls GET /api/v1/douyin/video, requests include_raw and waits briefly. An accepted response is polled at /api/v1/tasks/{uuid}. It reads only the fields needed for visibility, download permission, author, title and media. Stream bytes travel from an allowlisted CDN over validated HTTPS. Unknown permissions stop the task. A restricted or deleted post must not be retried through another identity.
+For each canonical video, the adapter calls GET /api/v1/douyin/video, requests include_raw and waits briefly. An accepted response is polled at /api/v1/tasks/{uuid}. It reads only the fields needed for visibility, download permission, author, title and media. Stream bytes travel from an allowlisted CDN over validated HTTPS. A public post with a disabled or unknown save setting uses the ordinary visitor playback URL. For a file the user has rights to keep, request keepPlayback. The official download address is selected only when the save setting permits it. A restricted or deleted post must not be retried through another identity.
 
 `media-lens identify "$SHARE_URL"` is the least expensive test. Then resolve the same URL and verify metadata before analyzing. Configure the key in the local process environment. The native provider returns a specific unsupported error where acquisition is unavailable.
 
@@ -26,6 +26,6 @@ With the Evil0ctal provider selected, `media-lens doctor` checks three things in
 | `PROVIDER_KEY_MISSING`, `PROVIDER_AUTH`, `PROVIDER_SCOPE` | Supply a valid local key with `douyin:read` to the CLI or MCP process. |
 | `IDENTITY_POOL_EXHAUSTED` | Check the guest pool on the local instance; a healthy API can have no available identities. |
 | `UPSTREAM_RISK_CONTROL`, `IDENTITY_LOGIN_REQUIRED` | Stop. Do not switch identities or collection methods to work around a refusal. |
-| `PUBLIC_DOWNLOAD_UNCONFIRMED`, `CONTENT_PRIVATE`, `MEDIA_WITHHELD` | Do not download. Viewing a share in a browser is insufficient evidence of permission. |
+| `PUBLIC_DOWNLOAD_UNCONFIRMED`, `CONTENT_PRIVATE`, `MEDIA_WITHHELD` | Verify explicit public status. Resolve can return metadata when the guest has no usable media address; analysis then reports MEDIA_WITHHELD. |
 
 The same recognized refusal is reported whether the v5 API answers immediately or queues a task. The upstream message, details, raw response and signed media URLs are never copied into that error.

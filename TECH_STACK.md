@@ -10,7 +10,7 @@ Inspected Evil0ctal commit [d44264e](https://github.com/Evil0ctal/Douyin_TikTok_
 
 - `src/dtk/api/routes/content.py` registers GET /api/v1/{platform}/video. The worker resolves short links. Read access needs douyin:read. Query options include raw platform data, which the adapter needs to verify explicit public visibility.
 - `src/dtk/api/routes/operations.py` and `tasks.py` distinguish 200 responses from accepted work. Poll GET /api/v1/tasks/{uuid} for queued work. Key goes only in the operator endpoint request header. Never request identity selection or explain mode.
-- `src/dtk/platforms/douyin/parser.py` maps missing private_status to public in its normalized output. Require explicit raw public status and refuse unavailable or download-restricted media.
+- `src/dtk/platforms/douyin/parser.py` maps missing private_status to public in its normalized output. Require explicit raw public status. Read the ordinary public playback URL independently of the creator save setting. Select the official download URL only when the setting allows it.
 - `src/dtk/mcp/tools.py` includes parse_url, get_video, get_task_result, download_media and transcribe_video. These are separate from this project's local evidence tools.
 - `docker/compose.yml` exposes only the API on loopback by default, with /readyz and a separate worker, PostgreSQL/TimescaleDB, migrations and Redis. The deployment must have a usable guest identity for public reads. A live service and authorized source are required for acceptance.
 

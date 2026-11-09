@@ -60,6 +60,12 @@ server.registerTool(
       url,
       provider,
       discardOriginal: z.boolean().optional(),
+      keepPlayback: z
+        .boolean()
+        .optional()
+        .describe(
+          "Retain the normal guest playback rendition when the user has rights to save it.",
+        ),
       maxFrames: z.int().min(1).max(120).optional(),
       model: z
         .enum(["auto", "tiny", "base", "small", "medium", "large-v3"])

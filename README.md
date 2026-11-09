@@ -4,7 +4,7 @@
 
 [简体中文](README.zh-CN.md) · [Verification status](IMPLEMENTATION_STATUS.md) · [Architecture](ARCHITECTURE.md)
 
-AgentMediaLens accepts public Douyin video links and prepares timestamped speech, keyframes and OCR for a local agent. Codex can request individual JPEGs and write its interpretation to Markdown. The first release is in development. The installed plugin has been exercised with generated English tutorial footage. Live public-video acceptance is tracked separately.
+AgentMediaLens accepts public Douyin video links and prepares timestamped speech, keyframes and OCR for a local agent. Codex can request individual JPEGs and write its interpretation to Markdown. The installed Codex plugin analyzed a real 28-second public video, read its images and wrote a time-cited report. Live cases also cover English speech, a Mandarin software tutorial and footage without speech.
 
 ```mermaid
 flowchart LR
@@ -60,7 +60,7 @@ media-lens result "$TASK_ID"
 media-lens cleanup
 ```
 
-For one-shot processing, add --discard-original to analyze or pass discardOriginal: true to media_analyze.
+When a user has rights to keep a video file, run `media-lens analyze "$SHARE_URL" --keep-playback` or pass `keepPlayback: true` to `media_analyze`. The result identifies the actual rendition and its path under the task directory. Creator-enabled downloads are cached for seven days by default. When the save button is disabled or unknown, ordinary guest playback can still be analyzed. By default its working file is deleted after processing. Use `--discard-original` to discard either rendition. A guest stream is a platform encode; camera masters are outside this interface.
 
 ## Codex and other MCP clients
 
@@ -96,7 +96,7 @@ The override makes loopback reach the running API by sharing its network namespa
 ## FAQ
 
 - **A share opens a photo note.** Identify returns its ID. The first video pipeline rejects albums with UNSUPPORTED_MEDIA.
-- **Why did the adapter refuse a playable link?** It requires explicit public visibility and permission to download in the provider response. Missing fields, revoked links and access controls can stop processing.
+- **Why did the adapter refuse a playable link?** Resolve requires confirmed public visibility. Analysis also needs a guest-accessible media address. Login requirements, removal, expired CDN links and platform refusals can stop a specific task. The share-menu save setting is reported separately.
 - **Can I use native only?** It identifies direct and shortened shares. Native metadata and downloads report NATIVE_UNSUPPORTED.
 - **Where is analysis saved?** Each UUID directory contains result.json, transcript.json, evidence.json, JPEGs and analysis.md. Read cached media only in a private directory owned by the operator. No per-user access control is provided for a shared cache.
 - **What happens when disk admission fails?** Cleanup expires originals; derived evidence remains. Archive terminal task directories offline before manually removing them. Stop running clients before editing the cache.

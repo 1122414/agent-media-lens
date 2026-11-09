@@ -20,7 +20,7 @@ const content = z.object({
   title: z.string(),
   author: z.object({ nickname: z.string() }),
   duration_ms: z.number().nullish(),
-  media: z.object({ video: z.object({ url: z.string() }) }),
+  media: z.object({ video: z.object({ url: z.string() }).nullish() }),
   raw: z.object({
     status: z.object({
       private_status: z.literal(0),
@@ -28,10 +28,17 @@ const content = z.object({
       is_delete: z.literal(false),
       allow_share: z.literal(true),
     }),
-    video_control: z.object({
-      allow_download: z.literal(true),
-      prevent_download: z.literal(false).optional(),
-    }),
+    video: z
+      .object({
+        download_addr: z.object({ url_list: z.array(z.string()) }).nullish(),
+      })
+      .optional(),
+    video_control: z
+      .object({
+        allow_download: z.unknown().optional(),
+        prevent_download: z.unknown().optional(),
+      })
+      .nullish(),
   }),
 });
 export function normalize(data: unknown) {
@@ -44,9 +51,22 @@ export function normalize(data: unknown) {
   if (!r.success)
     throw new LensError(
       "PUBLIC_DOWNLOAD_UNCONFIRMED",
-      "未能确认作品公开且允许下载",
+      "未能确认公开状态或读取有效的作品详情",
     );
   const v = r.data;
+  const flags = v.raw.video_control;
+  const permission =
+    flags?.allow_download === false || flags?.prevent_download === true
+      ? "disabled"
+      : flags?.allow_download === true &&
+          (flags.prevent_download === undefined ||
+            flags.prevent_download === false)
+        ? "allowed"
+        : "unknown";
+  const playback = v.media.video?.url;
+  const download =
+    permission === "allowed" && v.raw.video?.download_addr?.url_list[0];
+  const selected = download || playback;
   return {
     media: mediaSchema.parse({
       id: v.content_id,
@@ -54,9 +74,15 @@ export function normalize(data: unknown) {
       sourceUrl: "https://www.douyin.com/video/" + v.content_id,
       title: v.title,
       author: v.author.nickname,
+      downloadPermission: permission,
+      rendition: download
+        ? "platform_download"
+        : playback
+          ? "public_playback"
+          : undefined,
       duration: v.duration_ms == null ? null : v.duration_ms / 1000,
     }),
-    stream: checked(v.media.video.url, "stream").href,
+    stream: selected ? checked(selected, "stream").href : null,
   };
 }
 async function payload(response: Response) {

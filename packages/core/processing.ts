@@ -18,6 +18,7 @@ export function worker(
   onStage: (s: Stage) => void,
   signal: AbortSignal,
   trackWorker?: (pid: number) => void,
+  temporaryPlayback = false,
 ) {
   const script = join(projectRoot, "workers", "media_worker.py");
   const local = join(projectRoot, ".venv", "bin", "python");
@@ -32,6 +33,7 @@ export function worker(
       [
         script,
         dir,
+        ...(temporaryPlayback ? ["--temporary-playback"] : []),
         "--max-seconds",
         String(c.maxSeconds),
         "--interval",

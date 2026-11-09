@@ -34,6 +34,22 @@ it.each([
 ])("refuses %s", (u) => expect(() => share(u)).toThrow());
 it("does not confuse CDN and share domains", () =>
   expect(() => checked("https://v.douyinvod.com/v", "page")).toThrow());
+it("accepts the media edge only on a redirect from the known Douyin CDN", () => {
+  const edge = "https://" + "a".repeat(32) + ".v.smtcdns.com/media";
+  const previous = new URL("https://v11-colds.douyinvod.com/video");
+  expect(checked(edge, "stream", previous).href).toBe(edge);
+  expect(() => checked(edge, "stream")).toThrow();
+  expect(() =>
+    checked(edge, "stream", new URL("https://other.test")),
+  ).toThrow();
+  expect(() =>
+    checked(edge.replace(".v.", ".other."), "stream", previous),
+  ).toThrow();
+  expect(() =>
+    checked(edge.replace("https:", "http:"), "stream", previous),
+  ).toThrow();
+  expect(() => checked(edge, "page", previous)).toThrow();
+});
 it("maps duration and strips private raw data", () => {
   expect(normalize(data).media.duration).toBe(2.4);
   expect(normalize(data).media).not.toHaveProperty("raw");
@@ -42,10 +58,56 @@ it.each([
   { is_private: true },
   { kind: "image_album" },
   { raw: {} },
-  { raw: { ...data.raw, video_control: { allow_download: false } } },
+  { raw: { ...data.raw, status: { ...data.raw.status, private_status: 1 } } },
 ])("refuses restricted content", (patch) =>
   expect(() => normalize({ ...data, ...patch })).toThrow(),
 );
+const address = {
+  download_addr: { url_list: ["https://a.douyinvod.com/creator-download"] },
+};
+it.each([
+  { flags: { allow_download: false }, permission: "disabled" },
+  {
+    flags: { allow_download: true, prevent_download: true },
+    permission: "disabled",
+  },
+  { flags: {}, permission: "unknown" },
+  { flags: { allow_download: "true" }, permission: "unknown" },
+])(
+  "keeps only the normal public playback candidate when save permission is $permission",
+  ({ flags, permission }) => {
+    const v = normalize({
+      ...data,
+      raw: { ...data.raw, video: address, video_control: flags },
+    });
+    expect(v.media.downloadPermission).toBe(permission);
+    expect(v.stream).toBe(data.media.video.url);
+  },
+);
+it("returns the public metadata alone when the guest has no playable video", () => {
+  const v = normalize({
+    ...data,
+    media: { video: null },
+    raw: {
+      ...data.raw,
+      video: address,
+      video_control: { allow_download: false },
+    },
+  });
+  expect(v.media.title).toBe(data.title);
+  expect(v.stream).toBeNull();
+});
+it("selects the platform download rendition after checking permission and CDN", () => {
+  const candidate = (url: string) => ({
+    ...data,
+    raw: { ...data.raw, video: { download_addr: { url_list: [url] } } },
+  });
+  const url = address.download_addr.url_list[0];
+  expect(normalize(candidate(url)).stream).toBe(url);
+  expect(() => normalize(candidate("https://evil.example/file"))).toThrowError(
+    expect.objectContaining({ code: "UNSAFE_URL" }),
+  );
+});
 it("polls a v5 accepted task", async () => {
   vi.stubEnv("EVIL0CTAL_API_KEY", "test-only");
   try {

@@ -14,7 +14,11 @@ const pages = [
   "www.douyin.com.cn",
 ];
 const cdns = ["douyinvod.com", "zjcdn.com", "douyin.com", "amemv.com"];
-export function checked(input: string, kind: "page" | "stream") {
+export function checked(
+  input: string,
+  kind: "page" | "stream",
+  redirectedFrom?: URL,
+) {
   let u: URL;
   try {
     u = new URL(input);
@@ -25,7 +29,10 @@ export function checked(input: string, kind: "page" | "stream") {
   const allowed =
     kind === "page"
       ? pages.includes(host)
-      : cdns.some((d) => host === d || host.endsWith("." + d));
+      : cdns.some((d) => host === d || host.endsWith("." + d)) ||
+        (redirectedFrom?.protocol === "https:" &&
+          redirectedFrom.hostname.endsWith(".douyinvod.com") &&
+          /^[0-9a-f]{32}\.v\.smtcdns\.com$/.test(host));
   if (
     !allowed ||
     u.protocol !== "https:" ||
@@ -89,7 +96,7 @@ export async function fetchPublic(
       res.headers.location
     ) {
       res.destroy();
-      url = checked(new URL(res.headers.location, url).href, kind);
+      url = checked(new URL(res.headers.location, url).href, kind, url);
       if (
         kind === "page" &&
         /^\/(?:share\/)?(?:video|note|slides)\/\d{8,21}\/?$/.test(url.pathname)

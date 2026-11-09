@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readdirSync,
   realpathSync,
+  rmSync,
   statSync,
   unlinkSync,
 } from "node:fs";
@@ -69,6 +70,8 @@ export class Store {
         alive((process.platform === "win32" ? 1 : -1) * Number(row.worker))
       )
         continue;
+      rmSync(this.file(String(row.id), ".playback.mp4"), { force: true });
+      rmSync(this.file(String(row.id), "playback.mp4"), { force: true });
       this.stage(String(row.id), "FAILED", {
         error: { code: "INTERRUPTED", message: "处理进程已退出" },
       });
@@ -95,7 +98,7 @@ export class Store {
   }
   file(id: string, name: string) {
     if (
-      !/^(source\.mp4|audio\.wav|evidence\.json|result\.json|transcript\.json|analysis\.md|f\d{3}\.jpg)$/.test(
+      !/^(source\.mp4|\.?playback\.mp4|audio\.wav|evidence\.json|result\.json|transcript\.json|analysis\.md|f\d{3}\.jpg)$/.test(
         name,
       )
     )
@@ -110,7 +113,17 @@ export class Store {
     z.uuid().parse(id);
     const row = this.db.prepare("SELECT body FROM tasks WHERE id=?").get(id);
     if (!row) throw new LensError("NOT_FOUND", "任务不存在");
-    return JSON.parse(String(row.body));
+    const task: Task = JSON.parse(String(row.body));
+    if (task.status === "COMPLETED" && task.artifacts) {
+      for (const [key, name] of [
+        ["sourcePath", "source.mp4"],
+        ["playbackPath", "playback.mp4"],
+      ]) {
+        if (existsSync(this.file(id, name))) task.artifacts[key] = name;
+        else delete task.artifacts[key];
+      }
+    }
+    return task;
   }
   cleanup() {
     return this.transaction(() => {
@@ -119,14 +132,16 @@ export class Store {
       for (const row of this.db
         .prepare("SELECT id FROM tasks WHERE active=0")
         .all()) {
-        const path = this.file(String(row.id), "source.mp4");
-        if (
-          existsSync(path) &&
-          statSync(path).mtimeMs <=
-            Date.now() - this.settings.retentionDays * 86400000
-        ) {
-          unlinkSync(path);
-          removed++;
+        for (const name of ["source.mp4", "playback.mp4"]) {
+          const path = this.file(String(row.id), name);
+          if (
+            existsSync(path) &&
+            statSync(path).mtimeMs <=
+              Date.now() - this.settings.retentionDays * 86400000
+          ) {
+            unlinkSync(path);
+            removed++;
+          }
         }
       }
       return { removed };
