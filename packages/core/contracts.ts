@@ -20,13 +20,20 @@ export function failure(err: unknown) {
   };
 }
 export const mediaSchema = z.object({
-  id: z.string().regex(/^\d{8,21}$/),
-  platform: z.literal("douyin"),
+  id: z.string().regex(/^(?:\d{8,21}|BV1[1-9A-HJ-NP-Za-km-z]{9})$/),
+  platform: z.enum(["douyin", "bilibili"]),
   sourceUrl: z.url(),
   title: z.string().max(12000),
   author: z.string().max(512),
   duration: z.number().nonnegative().nullable(),
   kind: z.enum(["video", "image_album"]).optional(),
+  part: z
+    .object({
+      number: z.int().positive(),
+      total: z.int().positive(),
+      title: z.string(),
+    })
+    .optional(),
   pages: z
     .array(
       z.object({ page: z.int().positive(), kind: z.enum(["still", "live"]) }),

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Analyze Douyin image albums by page, with still posters and paired motion frames for Live Photos.
+- Analyze public Bilibili BV, av and short video links, keep the requested part and report guest playback availability.
+
 ## v0.1.0 · 2026-11-09
 
 - Resolve public Douyin videos with Evil0ctal v5 and identify video or photo shares natively.

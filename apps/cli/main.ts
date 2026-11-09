@@ -11,7 +11,7 @@ import { Lens } from "../../packages/core/service.js";
 import { z } from "zod";
 const cli = new Command()
   .name("media-lens")
-  .description("理解公开抖音视频，读取本地证据")
+  .description("理解公开抖音作品和 B 站视频，读取本地证据")
   .option("--json", "输出 JSON（默认）")
   .option("--markdown", "输出 Markdown")
   .option("--verbose", "输出结构化诊断日志到 stderr");
@@ -30,47 +30,55 @@ function service() {
 }
 const provider = z.enum(["evil0ctal", "native"]).optional();
 cli.command("config").action(() => show(config()));
-cli.command("doctor").action(async () => {
-  const c = config();
-  const versions: Record<string, string | null> = {};
-  const python =
-    process.env.MEDIA_LENS_PYTHON ||
-    join(projectRoot, ".venv", "bin", "python");
-  for (const [key, cmd, args] of [
-    ["ffmpeg", "ffmpeg", ["-version"]],
-    ["ffprobe", "ffprobe", ["-version"]],
-    ["ocr", "tesseract", ["--version"]],
-    [
-      "asr",
-      existsSync(python) ? python : "python3",
-      ["-c", "import faster_whisper; print(faster_whisper.__version__)"],
-    ],
-  ] as const) {
-    try {
-      versions[key] = execFileSync(cmd, [...args], {
-        encoding: "utf8",
-        timeout: 20000,
-        stdio: ["ignore", "pipe", "ignore"],
-      }).split("\n")[0];
-    } catch {
-      versions[key] = null;
-    }
-  }
-  const providerCheck =
-    c.provider === "evil0ctal" ? await inspectEvil(c) : null;
-  show({
-    node: process.version,
-    versions,
-    providerReady: providerCheck?.serviceReady ?? null,
-    providerCheck,
-    hasProviderKey: Boolean(process.env.EVIL0CTAL_API_KEY),
-  });
-  if (
-    Object.values(versions).includes(null) ||
-    (providerCheck !== null && providerCheck.code !== "OK")
+cli
+  .command("doctor")
+  .option(
+    "--platform <name>",
+    "检查 douyin 或 bilibili 的读取权限与容量",
+    "douyin",
   )
-    process.exitCode = 1;
-});
+  .action(async (opts) => {
+    const platform = z.enum(["douyin", "bilibili"]).parse(opts.platform);
+    const c = config();
+    const versions: Record<string, string | null> = {};
+    const python =
+      process.env.MEDIA_LENS_PYTHON ||
+      join(projectRoot, ".venv", "bin", "python");
+    for (const [key, cmd, args] of [
+      ["ffmpeg", "ffmpeg", ["-version"]],
+      ["ffprobe", "ffprobe", ["-version"]],
+      ["ocr", "tesseract", ["--version"]],
+      [
+        "asr",
+        existsSync(python) ? python : "python3",
+        ["-c", "import faster_whisper; print(faster_whisper.__version__)"],
+      ],
+    ] as const) {
+      try {
+        versions[key] = execFileSync(cmd, [...args], {
+          encoding: "utf8",
+          timeout: 20000,
+          stdio: ["ignore", "pipe", "ignore"],
+        }).split("\n")[0];
+      } catch {
+        versions[key] = null;
+      }
+    }
+    const providerCheck =
+      c.provider === "evil0ctal" ? await inspectEvil(c, fetch, platform) : null;
+    show({
+      node: process.version,
+      versions,
+      providerReady: providerCheck?.serviceReady ?? null,
+      providerCheck,
+      hasProviderKey: Boolean(process.env.EVIL0CTAL_API_KEY),
+    });
+    if (
+      Object.values(versions).includes(null) ||
+      (providerCheck !== null && providerCheck.code !== "OK")
+    )
+      process.exitCode = 1;
+  });
 cli.command("identify <url>").action(async (url) => show(await identify(url)));
 cli
   .command("resolve <url>")

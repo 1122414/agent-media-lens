@@ -14,11 +14,39 @@ const pages = [
   "www.douyin.com.cn",
 ];
 const cdns = ["douyinvod.com", "zjcdn.com", "douyin.com", "amemv.com"];
-export function checked(
-  input: string,
-  kind: "page" | "stream" | "photo",
-  redirectedFrom?: URL,
-) {
+const biliPages = [
+  "www.bilibili.com",
+  "m.bilibili.com",
+  "bilibili.com",
+  "b23.tv",
+];
+export const biliPath =
+  /^\/video\/(BV1[1-9A-HJ-NP-Za-km-z]{9}|av[1-9]\d{0,15})\/?$/;
+type UrlKind = "page" | "bili-page" | "stream" | "bili-stream" | "photo";
+function allowedHost(host: string, kind: UrlKind, redirectedFrom?: URL) {
+  switch (kind) {
+    case "page":
+      return pages.includes(host);
+    case "bili-page":
+      return biliPages.includes(host);
+    case "photo":
+      return /^p[0-9]+-(?:pc-)?sign\.douyinpic\.com$/.test(host);
+    case "bili-stream":
+      return (
+        host.endsWith(".bilivideo.com") ||
+        host.endsWith(".bilivideo.cn") ||
+        host === "upos-hz-mirrorakam.akamaized.net"
+      );
+    case "stream":
+      return (
+        cdns.some((d) => host === d || host.endsWith("." + d)) ||
+        (redirectedFrom?.protocol === "https:" &&
+          redirectedFrom.hostname.endsWith(".douyinvod.com") &&
+          /^[0-9a-f]{32}\.v\.smtcdns\.com$/.test(host))
+      );
+  }
+}
+export function checked(input: string, kind: UrlKind, redirectedFrom?: URL) {
   let u: URL;
   try {
     u = new URL(input);
@@ -26,15 +54,7 @@ export function checked(
     throw new LensError("INVALID_URL", "链接格式无效");
   }
   const host = u.hostname;
-  const allowed =
-    kind === "page"
-      ? pages.includes(host)
-      : kind === "photo"
-        ? /^p[0-9]+-(?:pc-)?sign\.douyinpic\.com$/.test(host)
-        : cdns.some((d) => host === d || host.endsWith("." + d)) ||
-          (redirectedFrom?.protocol === "https:" &&
-            redirectedFrom.hostname.endsWith(".douyinvod.com") &&
-            /^[0-9a-f]{32}\.v\.smtcdns\.com$/.test(host));
+  const allowed = allowedHost(host, kind, redirectedFrom);
   if (
     !allowed ||
     u.protocol !== "https:" ||
@@ -47,9 +67,33 @@ export function checked(
   return u;
 }
 export function share(input: string) {
-  const found = input.match(/https?:\/\/[^\s，。<>]+/g);
+  const found = input.match(/https?:\/\/[^\s，。；<>]+/g);
   if (found?.length !== 1)
-    throw new LensError("INVALID_URL", "请输入一个抖音作品分享链接");
+    throw new LensError("INVALID_URL", "请输入一个抖音或哔哩哔哩作品链接");
+  if (
+    URL.canParse(found[0]) &&
+    biliPages.includes(new URL(found[0]).hostname)
+  ) {
+    const u = checked(found[0], "bili-page");
+    const short = u.hostname === "b23.tv";
+    if (
+      !(short
+        ? /^\/[a-zA-Z0-9]+\/?$/.test(u.pathname)
+        : biliPath.test(u.pathname))
+    )
+      throw new LensError("UNSUPPORTED", "仅支持 B 站公开视频稿件");
+    const parts = u.searchParams.getAll("p");
+    if (
+      parts.length > 1 ||
+      (parts.length === 1 && !/^[1-9]\d{0,3}$/.test(parts[0]))
+    )
+      throw new LensError("INVALID_PART", "B 站分 P 参数无效");
+    u.search = "";
+    u.hash = "";
+    if (parts.length) u.searchParams.set("p", parts[0]);
+    if (!short) u.hostname = "www.bilibili.com";
+    return u.href;
+  }
   const u = checked(found[0], "page");
   if (
     !(
@@ -65,7 +109,7 @@ export function share(input: string) {
 }
 export async function fetchPublic(
   input: string,
-  kind: "page" | "stream" | "photo",
+  kind: UrlKind,
   signal: AbortSignal,
 ) {
   let url = checked(input, kind);
@@ -86,7 +130,12 @@ export async function fetchPublic(
             agent: false,
             family: 4,
             lookup: (_h, _o, cb) => cb(null, address, 4),
-            headers: { "user-agent": "Mozilla/5.0 AgentMediaLens/0.1" },
+            headers: {
+              "user-agent": "Mozilla/5.0 AgentMediaLens/0.3",
+              ...(kind === "bili-stream"
+                ? { referer: "https://www.bilibili.com/" }
+                : {}),
+            },
           },
           ok,
         );
@@ -100,8 +149,13 @@ export async function fetchPublic(
       res.destroy();
       url = checked(new URL(res.headers.location, url).href, kind, url);
       if (
-        kind === "page" &&
-        /^\/(?:share\/)?(?:video|note|slides)\/\d{8,21}\/?$/.test(url.pathname)
+        (kind === "bili-page" &&
+          url.hostname !== "b23.tv" &&
+          biliPath.test(url.pathname)) ||
+        (kind === "page" &&
+          /^\/(?:share\/)?(?:video|note|slides)\/\d{8,21}\/?$/.test(
+            url.pathname,
+          ))
       )
         return { res, url };
       continue;
@@ -119,7 +173,7 @@ export async function download(
   path: string,
   max: number,
   signal?: AbortSignal,
-  kind: "stream" | "photo" = "stream",
+  kind: "stream" | "bili-stream" | "photo" = "stream",
 ) {
   const { res } = await fetchPublic(
     stream,

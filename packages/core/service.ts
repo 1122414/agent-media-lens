@@ -127,6 +127,7 @@ export class Lens {
             this.store.file(id, inputName),
             c.maxBytes,
             controller.signal,
+            media.platform === "bilibili" ? "bili-stream" : "stream",
           );
         }
         const evidence = await this.io.worker(
@@ -185,7 +186,8 @@ export class Lens {
         this.store.transaction(() => {
           const completed = this.store.stage(id, "COMPLETED", { artifacts });
           const result: Result = {
-            schemaVersion: album ? "1.1" : "1.0",
+            schemaVersion:
+              album || media.platform === "bilibili" ? "1.1" : "1.0",
             media: { ...media, duration: evidence.duration },
             provider,
             ...evidence,
@@ -230,7 +232,7 @@ export class Lens {
     path: string,
     max: number,
     signal: AbortSignal,
-    kind: "stream" | "photo" = "stream",
+    kind: "stream" | "bili-stream" | "photo" = "stream",
   ) {
     if (max <= 0) throw new LensError("SIZE_LIMIT", "作品超出大小限制");
     const run = () => this.io.download(url, path, max, signal, kind);

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Config } from "./config.js";
 import { LensError, mediaSchema, type Provider } from "./contracts.js";
-import { checked, fetchPublic, share } from "./network.js";
+import { normalizeBilibili } from "./bilibili.js";
+import { biliPath, checked, fetchPublic, share } from "./network.js";
 const providerError = z.object({ code: z.string() });
 const envelope = z.object({
   success: z.boolean(),
@@ -143,12 +144,13 @@ async function payload(response: Response) {
   return envelope.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
 }
 const publicErrors = new Map([
-  ["IDENTITY_POOL_EXHAUSTED", "采集服务没有可调度的抖音访客身份"],
+  ["IDENTITY_POOL_EXHAUSTED", "采集服务没有可调度的平台访客身份"],
   ["IDENTITY_LOGIN_REQUIRED", "作品需要登录；已停止访客采集"],
   ["UPSTREAM_RISK_CONTROL", "平台限制了访客访问；已停止采集"],
   ["CONTENT_PRIVATE", "作品非公开；已停止采集"],
   ["MEDIA_WITHHELD", "平台未提供可下载的媒体"],
   ["RATE_LIMITED", "服务或平台限流，请稍后再试"],
+  ["INVALID_PARAM", "上游拒绝作品或分 P 参数"],
   ["NOT_FOUND", "未找到请求的资源"],
   ["UPSTREAM_UNREACHABLE", "采集服务无法连接平台"],
 ]);
@@ -206,7 +208,11 @@ async function ready(c: Config, request: typeof fetch) {
     return false;
   }
 }
-export async function inspectEvil(c: Config, request = fetch) {
+export async function inspectEvil(
+  c: Config,
+  request = fetch,
+  platform: "douyin" | "bilibili" = "douyin",
+) {
   const serviceReady = await ready(c, request);
   const key = process.env.EVIL0CTAL_API_KEY;
   if (!serviceReady) return { serviceReady, code: "PROVIDER_CONNECTION" };
@@ -227,18 +233,18 @@ export async function inspectEvil(c: Config, request = fetch) {
         }),
       })
       .parse((await read("/api/v1/auth/me")).data);
-    if (!me.user.scopes.some((s) => s === "douyin:read" || s === "admin"))
+    if (!me.user.scopes.some((s) => s === platform + ":read" || s === "admin"))
       return { serviceReady, code: "PROVIDER_SCOPE" };
     const count = z.int().nonnegative();
     const status = z
       .object({
-        pool: z.object({ douyin: z.object({ active: count }) }),
-        reserved_active: z.object({ douyin: count }),
+        pool: z.object({ [platform]: z.object({ active: count }) }),
+        reserved_active: z.object({ [platform]: count }),
       })
       .parse((await read("/api/v1/system/status")).data);
     const available = Math.max(
       0,
-      status.pool.douyin.active - status.reserved_active.douyin,
+      status.pool[platform].active - status.reserved_active[platform],
     );
     return {
       serviceReady,
@@ -258,11 +264,15 @@ export function evil(c: Config, request = fetch): Provider {
     health: () => ready(c, request),
     async resolve(input) {
       const source = share(input);
+      const platform =
+        new URL(source).hostname === "www.bilibili.com" ? "bilibili" : "douyin";
+      const normalizeResult =
+        platform === "bilibili" ? normalizeBilibili : normalize;
       const key = process.env.EVIL0CTAL_API_KEY;
       if (!key)
         throw new LensError("PROVIDER_AUTH", "请在本机配置 EVIL0CTAL_API_KEY");
       const signal = AbortSignal.timeout(45000);
-      const url = new URL("/api/v1/douyin/video", c.endpoint);
+      const url = new URL("/api/v1/" + platform + "/video", c.endpoint);
       url.search = new URLSearchParams({
         url: source,
         include_raw: "true",
@@ -271,7 +281,7 @@ export function evil(c: Config, request = fetch): Provider {
       }).toString();
       const read = (u: URL) => readProvider(u, key, signal, request);
       const initial = await read(url);
-      if (initial.status === 200) return normalize(initial.data, source);
+      if (initial.status === 200) return normalizeResult(initial.data, source);
       const id = z.object({ task_id: z.uuid() }).parse(initial.data).task_id;
       for (let i = 0; i < 40; i++) {
         await delay(750, undefined, { signal });
@@ -283,7 +293,7 @@ export function evil(c: Config, request = fetch): Provider {
             error: providerError.nullish(),
           })
           .parse(r.data);
-        if (task.state === "done") return normalize(task.data, source);
+        if (task.state === "done") return normalizeResult(task.data, source);
         if (task.state === "failed")
           throw providerFailure(
             task.error?.code,
@@ -296,6 +306,22 @@ export function evil(c: Config, request = fetch): Provider {
 }
 export async function identify(input: string) {
   let url = new URL(share(input));
+  if (url.hostname === "b23.tv") {
+    const requested = url.searchParams.get("p");
+    const r = await fetchPublic(
+      url.href,
+      "bili-page",
+      AbortSignal.timeout(12000),
+    );
+    r.res.destroy();
+    url = new URL(share(r.url.href));
+    if (requested) url.searchParams.set("p", requested);
+  }
+  if (url.hostname === "www.bilibili.com") {
+    const id = biliPath.exec(url.pathname)?.[1];
+    if (!id) throw new LensError("UNRESOLVED", "未能识别 B 站稿件");
+    return { id, kind: "video", url: url.href, platform: "bilibili" as const };
+  }
   if (url.hostname === "v.douyin.com") {
     const r = await fetchPublic(url.href, "page", AbortSignal.timeout(12000));
     r.res.destroy();
@@ -307,6 +333,7 @@ export async function identify(input: string) {
   if (!match) throw new LensError("UNRESOLVED", "未能确认最终作品类型");
   return {
     id: match[2],
+    platform: "douyin" as const,
     kind: match[1],
     url: "https://www.douyin.com/" + match[1] + "/" + match[2],
   };
@@ -317,12 +344,10 @@ export const native: Provider = {
     return true;
   },
   async resolve(input) {
-    const r = await identify(input);
+    await identify(input);
     throw new LensError(
-      r.kind === "video" ? "NATIVE_UNSUPPORTED" : "UNSUPPORTED_MEDIA",
-      r.kind === "video"
-        ? "原生 Provider 可识别作品，尚不支持元数据和下载"
-        : "该作品为图文类型",
+      "NATIVE_UNSUPPORTED",
+      "原生 Provider 可识别作品链接，读取作品详情与媒体需要 Evil0ctal",
     );
   },
 };
@@ -335,7 +360,10 @@ export async function resolveMedia(
   const selected = provider === "evil0ctal" ? evil(c) : native;
   try {
     const found = await selected.resolve(link.url);
-    if (found.media.id !== link.id)
+    if (
+      found.media.platform !== link.platform ||
+      (link.platform === "douyin" && found.media.id !== link.id)
+    )
       throw new LensError("PROVIDER_PROTOCOL", "作品标识不匹配");
     return { ...found, provider: selected.name };
   } catch (e) {

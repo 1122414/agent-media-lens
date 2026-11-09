@@ -21,7 +21,19 @@ English and Mandarin were tested through a local, guest-only Evil0ctal 5.1.11 de
 | No spoken narration, save enabled | [Creator-offered green-screen footage](https://www.douyin.com/video/7222146097379134758) | 19.526 s, 0 segments, 10 frames and 8 nonempty OCR rows. The platform download file contained 768,272 bytes. |
 | Rapid visual changes, Chinese music, save disabled | Tester-supplied public share, repeated in independent CLI and installed Codex sessions | 28.001 s, 4 segments, 12 frames, 12 nonempty OCR rows. The client cited the street at 0 s and the dark underwater scene at 13 s. It identified uncertainty in the sung words and wrote a report. A separate keepPlayback run retained a 1920×1080 H.264/AAC playback copy. Default analysis left no MP4. |
 | Unavailable video | Canonical video path with nonexistent ID 9999999999999999999 | Live provider returned NOT_FOUND, CLI exit 1. |
-| Photo share | Tester-supplied public note | Short link identified the note. Video resolve returned UNSUPPORTED_MEDIA. |
+| Photo share at v0.1.0 | Tester-supplied public note | The video-only release identified the note and returned UNSUPPORTED_MEDIA. See current album results below. |
 | Invalid input | `media-lens identify file:///tmp/a` | INVALID_URL, exit 2 before any platform request. |
 
 The underlying platform can revoke public access or change rendition delivery. Rerun with an authorized equivalent if a listed sample becomes unavailable. Private and deleted flags are also covered by isolated provider tests.
+
+## Album and Bilibili acceptance after v0.1.0
+
+| Input | Observed evidence |
+|---|---|
+| Three-page Jiuzhaigou Live Photo album | Installed plugin read three posters and six motion frames. All nine OCR entries had a page. Page 3 showed waterbirds and trailing wakes. |
+| Eight-page static Origami note | Eight posters, null timestamps, no motion frames. Both album runs removed the source media. |
+| 433-second Mandarin Bilibili tutorial | MCP returned 294 speech segments and 30 frames. A report linked the locked-screen scheduling example to a specific frame. |
+| 88-second Bilibili software animation | MCP returned 0 speech segments and 30 frames. A report traced device layout and file dragging using the screen evidence. |
+| Public 13-part upload, P2 | Resolve returned part 2 of 13, Coffee Run, 185 seconds. A separate b23.tv test identified a canonical BV URL. |
+
+For each Bilibili sample the installed plugin's launcher returned actual JPEG content and saved a time-cited report. The reports and raw user media are kept out of Git. Offline part-selection, scope, restricted content, incomplete rendition and CDN checks live in `tests/bilibili.test.ts`.

@@ -9,7 +9,7 @@ import { Lens } from "../../packages/core/service.js";
 const lens = new Lens(config());
 const server = new McpServer({
   name: "agent-media-lens",
-  version: "0.2.0",
+  version: "0.3.0",
 });
 const taskId = z.uuid(),
   url = z.string().min(1).max(4096),
@@ -46,7 +46,7 @@ server.registerTool(
   "media_resolve",
   {
     description:
-      "Resolve one public Douyin video or photo album URL and return normalized metadata.",
+      "Resolve one public Douyin video, photo album or Bilibili video URL and return normalized metadata.",
     inputSchema: z.object({ url, provider }),
   },
   ({ url, provider }) =>

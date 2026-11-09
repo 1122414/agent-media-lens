@@ -10,6 +10,8 @@ The [v0.1.0 report](docs/releases/v0.1.0.md) lists acceptance checks, installati
 
 Public Douyin albums now work through the same CLI and MCP entry points. The Jiuzhaigou share produced three live pages, nine JPEGs and nine page-linked OCR rows. The Origami note produced eight still pages with null timestamps. The original album inputs were removed in both cases. The album stage passed 41 TypeScript tests and two Python tests.
 
+Bilibili BV, av and b23.tv video URLs now use the same CLI and MCP. The two supplied videos completed with 294 and 0 speech segments respectively, and 30 frames each. A real multi-part resolve preserved P2 of 13. The installed 0.3.0 launcher returned JPEGs and saved both reports. The local suite passed 68 TypeScript and two Python tests, static checks and the Docker CLI build. See the [Bilibili scope and setup](docs/providers/bilibili.md).
+
 ## Historical stage results
 
 Phase 1: workspace dependencies locked. Strict build, ESLint and provider tests passed. Native resolution of a real public short link identified a photo note. Live Evil0ctal authorization and video download remain pending. Compose and Colima are now available.

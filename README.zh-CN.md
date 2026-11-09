@@ -1,6 +1,6 @@
 # AgentMediaLens
 
-面向 AI Agent 的本地多媒体理解基础设施。输入公开抖音作品链接，获得带时间戳的逐字稿、关键帧、画面文字和 Markdown 分析。已用独立 Codex 客户端分析一条 28 秒的真实作品，读到实际图片并写出带时间戳的报告。中文软件教程、英文口播和无口播素材也已在真实平台验证。详见[实施状态](IMPLEMENTATION_STATUS.md)。
+面向 AI Agent 的本地多媒体理解基础设施。输入抖音视频、图文、实况照片或 B 站视频链接。视频按时间读取口播与画面；图集按页读取静态图、动态采样和画面文字。已用独立 Codex 客户端分析一条 28 秒的真实作品，读到实际图片并写出带时间戳的报告。中文软件教程、英文口播和无口播素材也已在真实平台验证。详见[实施状态](IMPLEMENTATION_STATUS.md)。
 
 [English](README.md) · [v0.1.0 验收与安装报告](docs/releases/v0.1.0.md) · [架构图和模块关系](ARCHITECTURE.md) · [技术选型](TECH_STACK.md)
 
@@ -68,6 +68,7 @@ docker compose -f compose.yaml -f compose.local-provider.yaml run --rm -T lens d
 - 用 MEDIA_LENS_CONFIG 指定 JSON 文件，用 MEDIA_LENS_CACHE 覆盖缓存目录，运行 media-lens config 查看生效配置。默认并发 1、时长 600 秒、单文件 500 MB、缓存预算 10 GB、原片保留 7 天。启动新任务或运行 cleanup 时清除过期原片。
 - 单次分析可加 --discard-original，处理结束即清理原片；MCP 对应字段为 discardOriginal。
 - 初始抽帧间隔 4 秒，上限 30 帧；普通 CPU 默认 base/int8。可设置 interval、maxFrames、model、device 和 ocrLang。字段与默认值见[英文配置表](README.md)。
+- B 站支持 BV、av 视频链接和 b23.tv 短链，保留指定的分 P。给采集服务密钥配置 `bilibili:read`，用 `media-lens doctor --platform bilibili` 核对。访客可读的单文件 MP4 可直接分析，默认每 P 最长 10 分钟。详见 [B 站适配说明](docs/providers/bilibili.md)。
 - 图文和实况照片按页分析，静态页生成一张 JPEG，实况页额外生成两帧动态证据。用 frames <任务号> --page 3 或 MCP 的 page 参数读取第三页，静态页没有时间戳。原生适配器目前可解析链接，元数据和下载依赖外部服务。
 - 抖音关闭「保存本地」时，仍可分析访客正常观看的播放流。需要保留有权保存的副本时，运行 `media-lens analyze "$SHARE_URL" --keep-playback`，或在 MCP 传 `keepPlayback: true`。结果里的 `playbackPath` 指向播放版本，`sourcePath` 指向平台提供的下载版本，路径均相对于任务目录。只有公开详情时可用 resolve 读元数据。私密、已删除、需要登录或平台拒绝访问的作品会返回错误。
 - 每个任务的 UUID 目录保存 result.json、transcript.json、关键帧和 analysis.md。结构化结果可按时间和帧 ID 追溯。

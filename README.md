@@ -4,7 +4,7 @@
 
 [简体中文](README.zh-CN.md) · [v0.1.0 report](docs/releases/v0.1.0.md) · [Architecture](docs/architecture/overview.md)
 
-AgentMediaLens accepts public Douyin video links and prepares timestamped speech, keyframes and OCR for a local agent. Codex can request individual JPEGs and write its interpretation to Markdown. The installed Codex plugin analyzed a real 28-second public video, read its images and wrote a time-cited report. Live cases also cover English speech, a Mandarin software tutorial and footage without speech.
+AgentMediaLens prepares local evidence from public Douyin videos, photo notes, Live Photos and Bilibili videos. Videos have timestamped speech and keyframes. Albums have page-indexed images, motion samples and OCR. Codex can request individual JPEGs and write its interpretation to Markdown. The installed Codex plugin analyzed a real 28-second public video, read its images and wrote a time-cited report. Live cases also cover English speech, a Mandarin software tutorial and footage without speech.
 
 ```mermaid
 flowchart LR
@@ -31,11 +31,11 @@ export PATH="$HOME/.local/bin:$PATH"
 media-lens doctor
 ```
 
-Doctor checks local binaries and the configured provider. For Evil0ctal it exits with status 1 if the API is unreachable, the key lacks access, or the Douyin pool has no available identities. An OK check does not establish download permission for a particular video. Link identification and existing-task evidence reads work independently.
+Doctor checks local binaries and the configured provider. For Evil0ctal it exits with status 1 if the API is unreachable, the key lacks access, or the selected platform has no available guest identities. Use `media-lens doctor --platform bilibili` to check Bilibili. An OK check does not establish download permission for a particular video. Link identification and existing-task evidence reads work independently.
 
 ## Providers and configuration
 
-Follow the [Douyin setup](docs/providers/douyin.md) for an independent Evil0ctal v5 service. Keep its least-privilege key in EVIL0CTAL_API_KEY. Pass a JSON config path via MEDIA_LENS_CONFIG. Set MEDIA_LENS_CACHE and EVIL0CTAL_ENDPOINT to override the file. The optional MEDIA_LENS_PYTHON selects a worker interpreter. Run `media-lens config` to print effective settings. Keys never appear in config output.
+Follow the [Douyin setup](docs/providers/douyin.md) for an independent Evil0ctal v5 service. For BV, av, b23.tv and multi-part videos, follow the [Bilibili guide](docs/providers/bilibili.md). Keep the key scoped to the required platforms in EVIL0CTAL_API_KEY. Pass a JSON config path via MEDIA_LENS_CONFIG. Set MEDIA_LENS_CACHE and EVIL0CTAL_ENDPOINT to override the file. The optional MEDIA_LENS_PYTHON selects a worker interpreter. Run `media-lens config` to print effective settings. Keys never appear in config output.
 
 | Setting | Default | Purpose |
 |---|---|---|
