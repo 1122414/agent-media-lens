@@ -8,7 +8,8 @@ import {
 } from "./config.js";
 import { LensError, mediaSchema, type Provider } from "./contracts.js";
 import { normalizeBilibili } from "./bilibili.js";
-import { biliPath, checked, fetchPublic, share } from "./network.js";
+import { biliPath, checked, fetchPublic, share, xhsPage } from "./network.js";
+import { identifyXhs, resolveXhs } from "./xiaohongshu.js";
 const providerError = z.object({ code: z.string() });
 const resultMeta = z
   .object({
@@ -428,6 +429,8 @@ export function evil(c: Config, request = fetch): Provider {
     health: () => ready(c, request),
     async resolve(input) {
       const source = share(input);
+      if (xhsPage(new URL(source).hostname))
+        throw new LensError("UNSUPPORTED", "小红书分享仅由原生访客适配器读取");
       const platform =
         new URL(source).hostname === "www.bilibili.com" ? "bilibili" : "douyin";
       const normalizeResult =
@@ -445,6 +448,7 @@ export function evil(c: Config, request = fetch): Provider {
 }
 export async function identify(input: string) {
   let url = new URL(share(input));
+  if (xhsPage(url.hostname)) return identifyXhs(url.href);
   if (url.hostname === "b23.tv") {
     const requested = url.searchParams.get("p");
     const r = await fetchPublic(
@@ -483,7 +487,9 @@ export const native: Provider = {
     return true;
   },
   async resolve(input) {
-    await identify(input);
+    const source = share(input);
+    if (xhsPage(new URL(source).hostname)) return resolveXhs(source);
+    await identify(source);
     throw new LensError(
       "NATIVE_UNSUPPORTED",
       "原生 Provider 可识别作品链接，读取作品详情与媒体需要 Evil0ctal",
@@ -495,7 +501,10 @@ export async function resolveMedia(
   input: string,
   provider = c.provider,
 ) {
-  const link = await identify(input);
+  const source = share(input);
+  if (xhsPage(new URL(source).hostname))
+    return { ...(await native.resolve(source)), provider: native.name };
+  const link = await identify(source);
   const selected = provider === "evil0ctal" ? evil(c) : native;
   try {
     const found = await selected.resolve(link.url);

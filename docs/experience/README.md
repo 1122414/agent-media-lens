@@ -11,3 +11,5 @@
 [Match a Bilibili player to a part](patterns/bilibili-parts.md) applies to shares with a page query and multi-part post durations. Verified with a 13-part public upload and covered with isolated mismatch, preview and segmented-media tests.
 
 [Author feed coverage and missing metrics](patterns/author-feed-coverage.md) applies when a public video is readable but the creator feed stops or omits likes. Verified for Bilibili with an independently published collection directory; Douyin guest upload refusal was observed repeatedly. A reserved login and independent guest detail checks yielded two pages for the same author whose guest feed had been refused. Matched video comparisons were also exercised on an explicitly scoped Bilibili collection. Limited first-page handling is verified against both v5 response shapes in fixtures.
+
+[Xiaohongshu share recognition versus content access](patterns/xhs-share-gates.md) applies when a note ID is known but the next request leads to login or an error page. Verified on live guest refusals; successful media decoding is fixture-tested only.

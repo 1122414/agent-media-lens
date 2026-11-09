@@ -129,7 +129,7 @@ server.registerTool(
   "media_resolve",
   {
     description:
-      "Resolve one public Douyin video, photo album or Bilibili video URL and return normalized metadata.",
+      "Resolve a public Douyin, Bilibili or Xiaohongshu work and return metadata. Xiaohongshu uses the original share, without login. A login gate is not media evidence.",
     inputSchema: z.object({ url, provider }),
   },
   ({ url, provider }) =>

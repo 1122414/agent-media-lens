@@ -27,6 +27,8 @@ Album results use schema 1.1. Existing video results in 1.0 remain readable. Alb
 
 Bilibili video results also use schema 1.1. Media includes the canonical BV identifier, platform `bilibili` and `part` with a one-based number, total and title. Duration, transcript and frames refer to the selected part. The canonical URL retains `?p=N` for later parts and omits tracking parameters. The rendition is `public_playback` when a supported stream is available.
 
+Xiaohongshu uses schema 1.1 and platform `xiaohongshu`, with a 24-character hexadecimal note ID. Optional `description` is the note caption, not OCR or speech. Only the token-free citation URL is persisted; callers should pass the **original share** again for media operations. No migration is required for existing stored tasks.
+
 ### Author profiles
 
 `media_list_profile` and `media-lens profile` return one page. The default `overview` asks for the author's own public uploads and collection directory. When uploads are refused but a collection is available, the response identifies the first collection by ID, sets `view=collection` and reports the uploads error. An empty collection directory alongside a refused feed leaves the upload count unknown.

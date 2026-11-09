@@ -4,6 +4,8 @@
 
 [English](README.md) · [v0.1.0 验收与安装报告](docs/releases/v0.1.0.md) · [架构图和模块关系](ARCHITECTURE.md) · [技术选型](TECH_STACK.md)
 
+**小红书（访客试验）**：把 App 复制的完整笔记分享原文发给插件即可。它只读官方公开页，不打开浏览器，也不用账号。若页面提供真实视频或逐页图片，就进入本地处理；若要求登录、验证或只返回预览，就告诉你未读到画面。已实测登录拦截，真实笔记成功取帧仍待验证。[范围和用法](docs/providers/xiaohongshu.md)
+
 ```mermaid
 flowchart LR
  分享链接 --> 作品识别 --> 采集适配器 --> 下载

@@ -36,11 +36,13 @@ cli
   .command("doctor")
   .option(
     "--platform <name>",
-    "检查 douyin 或 bilibili 的读取权限与容量",
+    "检查 douyin / bilibili 的服务配置，或 xiaohongshu 的本地处理环境",
     "douyin",
   )
   .action(async (opts) => {
-    const platform = z.enum(["douyin", "bilibili"]).parse(opts.platform);
+    const platform = z
+      .enum(["douyin", "bilibili", "xiaohongshu"])
+      .parse(opts.platform);
     const c = config();
     const versions: Record<string, string | null> = {};
     const python =
@@ -67,13 +69,17 @@ cli
       }
     }
     const providerCheck =
-      c.provider === "evil0ctal" ? await inspectEvil(c, fetch, platform) : null;
+      platform !== "xiaohongshu" && c.provider === "evil0ctal"
+        ? await inspectEvil(c, fetch, platform)
+        : null;
     show({
       node: process.version,
       versions,
       providerReady: providerCheck?.serviceReady ?? null,
       providerCheck,
-      hasProviderKey: Boolean(providerKey(c)),
+      ...(platform === "xiaohongshu"
+        ? { accessMode: "native-guest", noteAccess: "untested" }
+        : { hasProviderKey: Boolean(providerKey(c)) }),
     });
     if (
       Object.values(versions).includes(null) ||

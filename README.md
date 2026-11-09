@@ -6,6 +6,8 @@
 
 AgentMediaLens prepares local evidence from public Douyin videos, photo notes, Live Photos and Bilibili videos. Videos have timestamped speech and keyframes. Albums have page-indexed images, motion samples and OCR. Codex can request individual JPEGs and write its interpretation to Markdown. The installed Codex plugin analyzed a real 28-second public video, read its images and wrote a time-cited report. Live cases also cover English speech, a Mandarin software tutorial and footage without speech.
 
+**Experimental Xiaohongshu guest adapter:** paste the original note share. It can use a guest page’s published MP4 or still images; it stops on login gates, challenges and previews. Live gate handling and offline media processing are verified; a successful live note is still needed. [Usage and limits](docs/providers/xiaohongshu.md).
+
 ```mermaid
 flowchart LR
  Link --> Resolver --> Provider --> Download --> FFmpeg

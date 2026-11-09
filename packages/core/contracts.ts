@@ -19,30 +19,41 @@ export function failure(err: unknown) {
     message: "操作失败，请检查服务、文件权限和运行环境",
   };
 }
-export const mediaSchema = z.object({
-  id: z.string().regex(/^(?:\d{8,21}|BV1[1-9A-HJ-NP-Za-km-z]{9})$/),
-  platform: z.enum(["douyin", "bilibili"]),
-  sourceUrl: z.url(),
-  title: z.string().max(12000),
-  author: z.string().max(512),
-  duration: z.number().nonnegative().nullable(),
-  kind: z.enum(["video", "image_album"]).optional(),
-  part: z
-    .object({
-      number: z.int().positive(),
-      total: z.int().positive(),
-      title: z.string(),
-    })
-    .optional(),
-  pages: z
-    .array(
-      z.object({ page: z.int().positive(), kind: z.enum(["still", "live"]) }),
-    )
-    .max(120)
-    .optional(),
-  downloadPermission: z.enum(["allowed", "disabled", "unknown"]).optional(),
-  rendition: z.enum(["platform_download", "public_playback"]).optional(),
-});
+export const mediaSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(/^(?:\d{8,21}|BV1[1-9A-HJ-NP-Za-km-z]{9}|[a-f0-9]{24})$/),
+    platform: z.enum(["douyin", "bilibili", "xiaohongshu"]),
+    sourceUrl: z.url(),
+    title: z.string().max(12000),
+    author: z.string().max(512),
+    description: z.string().max(12000).optional(),
+    duration: z.number().nonnegative().nullable(),
+    kind: z.enum(["video", "image_album"]).optional(),
+    part: z
+      .object({
+        number: z.int().positive(),
+        total: z.int().positive(),
+        title: z.string(),
+      })
+      .optional(),
+    pages: z
+      .array(
+        z.object({ page: z.int().positive(), kind: z.enum(["still", "live"]) }),
+      )
+      .max(120)
+      .optional(),
+    downloadPermission: z.enum(["allowed", "disabled", "unknown"]).optional(),
+    rendition: z.enum(["platform_download", "public_playback"]).optional(),
+  })
+  .refine(
+    (m) =>
+      m.platform === "xiaohongshu"
+        ? /^[a-f0-9]{24}$/.test(m.id)
+        : m.id.length !== 24,
+    { message: "作品编号与平台不符" },
+  );
 export type Media = z.infer<typeof mediaSchema>;
 export interface Candidate {
   media: Media;

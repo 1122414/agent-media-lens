@@ -22,16 +22,31 @@ const biliPages = [
 ];
 export const biliPath =
   /^\/video\/(BV1[1-9A-HJ-NP-Za-km-z]{9}|av[1-9]\d{0,15})\/?$/;
+export const xhsPath = /^\/(?:explore|discovery\/item)\/([a-f0-9]{24})\/?$/;
+const xhsShort = ["xhslink.cn", "xhslink.com"];
+export const xhsNoteHost = (host: string) =>
+  ["www.xiaohongshu.com", "xiaohongshu.com"].includes(host);
+export const xhsPage = (host: string) =>
+  xhsShort.includes(host) || xhsNoteHost(host);
+export type AssetKind =
+  "stream" | "bili-stream" | "photo" | "xhs-photo" | "xhs-stream";
 type UrlKind =
   | "bili-profile"
   | "dy-profile"
   | "page"
   | "bili-page"
-  | "stream"
-  | "bili-stream"
-  | "photo";
+  | "xhs-page"
+  | "xhs-identify"
+  | AssetKind;
 function allowedHost(host: string, kind: UrlKind, redirectedFrom?: URL) {
   switch (kind) {
+    case "xhs-page":
+    case "xhs-identify":
+      return xhsPage(host);
+    case "xhs-photo":
+      return /^sns-(?:webpic|img)(?:-[a-z0-9]+)?\.xhscdn\.com$/.test(host);
+    case "xhs-stream":
+      return /^sns-video(?:-[a-z0-9]+)?\.xhscdn\.(?:com|net)$/.test(host);
     case "bili-profile":
       return biliPages.includes(host) || host === "space.bilibili.com";
     case "dy-profile":
@@ -80,7 +95,24 @@ export function checked(input: string, kind: UrlKind, redirectedFrom?: URL) {
 export function share(input: string) {
   const found = input.match(/https?:\/\/[^\s，。；<>]+/g);
   if (found?.length !== 1)
-    throw new LensError("INVALID_URL", "请输入一个抖音或哔哩哔哩作品链接");
+    throw new LensError(
+      "INVALID_URL",
+      "请输入一个抖音、哔哩哔哩或小红书作品链接",
+    );
+  if (URL.canParse(found[0]) && xhsPage(new URL(found[0]).hostname)) {
+    const raw = new URL(found[0]);
+    const short = xhsShort.includes(raw.hostname);
+    if (short && raw.protocol === "http:" && !raw.port) raw.protocol = "https:";
+    const u = checked(raw.href, "xhs-page");
+    if (
+      !(short
+        ? /^\/(?:[a-z]\/)?[A-Za-z0-9_-]{3,64}\/?$/.test(u.pathname)
+        : xhsPath.test(u.pathname))
+    )
+      throw new LensError("UNSUPPORTED", "仅支持小红书单篇公开笔记的分享链接");
+    u.hash = "";
+    return u.href;
+  }
   if (
     URL.canParse(found[0]) &&
     biliPages.includes(new URL(found[0]).hostname)
@@ -118,12 +150,46 @@ export function share(input: string) {
   u.search = "";
   return u.href;
 }
+export function checkXhsGate(url: URL, status?: number) {
+  if (
+    /^\/(?:website-login|login)(?:\/|$)/i.test(url.pathname) ||
+    status === 401
+  )
+    throw new LensError(
+      "IDENTITY_LOGIN_REQUIRED",
+      "小红书要求登录；访客未读到作品。请勿向 Agent 提供 Cookie",
+    );
+  if (
+    /^\/(?:website-security|captcha|verify|challenge)(?:\/|$)/i.test(
+      url.pathname,
+    ) ||
+    status === 403 ||
+    status === 461 ||
+    status === 471
+  )
+    throw new LensError(
+      "UPSTREAM_RISK_CONTROL",
+      "小红书拒绝本次访问或要求验证；已停止",
+    );
+  if (status === 429) throw new LensError("RATE_LIMITED", "小红书限流；已停止");
+  if (
+    /^\/(?:404|undertake_note_error)(?:\/|$)/i.test(url.pathname) ||
+    status === 404 ||
+    status === 410
+  )
+    throw new LensError(
+      "XHS_SHARE_UNAVAILABLE",
+      "这条小红书分享当前不可读；无法据此确认笔记已删除",
+    );
+}
 export async function fetchPublic(
   input: string,
   kind: UrlKind,
   signal: AbortSignal,
 ) {
   let url = checked(input, kind);
+  const xhs = kind === "xhs-page" || kind === "xhs-identify";
+  let expectedNote = xhs ? xhsPath.exec(url.pathname)?.[1] : undefined;
   for (let hop = 0; hop <= 4; hop++) {
     const ips = await lookup(url.hostname, { all: true, family: 4 });
     if (
@@ -158,7 +224,26 @@ export async function fetchPublic(
       res.headers.location
     ) {
       res.destroy();
-      url = checked(new URL(res.headers.location, url).href, kind, url);
+      const next = new URL(res.headers.location, url);
+      // Some official short links advertise an HTTP location. Never request it in plaintext.
+      if (xhs && next.protocol === "http:" && !next.port)
+        next.protocol = "https:";
+      url = checked(next.href, kind, url);
+      if (xhs) {
+        checkXhsGate(url);
+        const note = xhsPath.exec(url.pathname)?.[1];
+        if (note && !xhsShort.includes(url.hostname)) {
+          if (expectedNote && note !== expectedNote)
+            throw new LensError("PROVIDER_PROTOCOL", "小红书跳转到了其他笔记");
+          expectedNote = note;
+          if (kind === "xhs-identify") return { res, url };
+        } else if (
+          !xhsShort.includes(url.hostname) &&
+          !["/", "/explore"].includes(url.pathname)
+        ) {
+          throw new LensError("UNRESOLVED", "分享未指向可识别的小红书笔记");
+        }
+      }
       if (
         (kind === "bili-profile" &&
           ["space.bilibili.com", "m.bilibili.com"].includes(url.hostname)) ||
@@ -176,6 +261,8 @@ export async function fetchPublic(
     }
     if (res.statusCode !== 200) {
       res.destroy();
+      if (xhs || kind === "xhs-photo" || kind === "xhs-stream")
+        checkXhsGate(url, res.statusCode);
       throw new LensError("UNAVAILABLE", "公开资源不可访问");
     }
     return { res, url };
@@ -187,7 +274,7 @@ export async function download(
   path: string,
   max: number,
   signal?: AbortSignal,
-  kind: "stream" | "bili-stream" | "photo" = "stream",
+  kind: AssetKind = "stream",
 ) {
   const { res } = await fetchPublic(
     stream,

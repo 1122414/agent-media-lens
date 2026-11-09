@@ -8,7 +8,7 @@ import {
 import { z } from "zod";
 import { configSchema, type Config } from "./config.js";
 import { failure, LensError, type Media, type Evidence } from "./contracts.js";
-import { share, download } from "./network.js";
+import { share, download, type AssetKind } from "./network.js";
 import { resolveMedia } from "./providers.js";
 import { worker } from "./processing.js";
 import { Store } from "./storage.js";
@@ -99,7 +99,7 @@ export class Lens {
               photo,
               remaining,
               controller.signal,
-              "photo",
+              media.platform === "xiaohongshu" ? "xhs-photo" : "photo",
             );
             remaining -= statSync(photo).size;
             if (slide.clip) {
@@ -127,7 +127,11 @@ export class Lens {
             this.store.file(id, inputName),
             c.maxBytes,
             controller.signal,
-            media.platform === "bilibili" ? "bili-stream" : "stream",
+            media.platform === "xiaohongshu"
+              ? "xhs-stream"
+              : media.platform === "bilibili"
+                ? "bili-stream"
+                : "stream",
           );
         }
         const evidence = await this.io.worker(
@@ -186,8 +190,7 @@ export class Lens {
         this.store.transaction(() => {
           const completed = this.store.stage(id, "COMPLETED", { artifacts });
           const result: Result = {
-            schemaVersion:
-              album || media.platform === "bilibili" ? "1.1" : "1.0",
+            schemaVersion: album || media.platform !== "douyin" ? "1.1" : "1.0",
             media: { ...media, duration: evidence.duration },
             provider,
             ...evidence,
@@ -232,7 +235,7 @@ export class Lens {
     path: string,
     max: number,
     signal: AbortSignal,
-    kind: "stream" | "bili-stream" | "photo" = "stream",
+    kind: AssetKind = "stream",
   ) {
     if (max <= 0) throw new LensError("SIZE_LIMIT", "作品超出大小限制");
     const run = () => this.io.download(url, path, max, signal, kind);

@@ -1,7 +1,7 @@
 {
   "name": "agent-media-lens",
   "version": "0.5.0",
-  "description": "Study public Douyin and Bilibili works using local evidence, compare high-like posts with peers, and turn findings into optional original production plans.",
+  "description": "Read video frames, speech and album pages from Douyin and Bilibili; try public Xiaohongshu notes without signing in.",
   "author": {
     "name": "AgentMediaLens contributors"
   },

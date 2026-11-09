@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Try individual Xiaohongshu note shares without a browser or an account. Scoped guest resolution, login/verification errors, ordered stills and public MP4 processing; live positive media acceptance pending.
+
 - Compare high-like and ordinary posts from an observed creator feed and save evidence-linked studies. Ask for original directions without selecting a genre, or give a free-text brief for a separate production plan.
 
 - Read two or more public Douyin upload pages with an explicitly selected, reserved local login when the platform permits paging. Guest access remains the default.
