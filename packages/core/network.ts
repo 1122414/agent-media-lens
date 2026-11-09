@@ -1,7 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { get } from "node:https";
-import { createWriteStream } from "node:fs";
-import { unlink } from "node:fs/promises";
+
+import { open, unlink } from "node:fs/promises";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import ipaddr from "ipaddr.js";
@@ -105,11 +105,16 @@ export async function fetchPublic(
   }
   throw new LensError("REDIRECT_LIMIT", "重定向次数超限");
 }
-export async function download(stream: string, path: string, max: number) {
+export async function download(
+  stream: string,
+  path: string,
+  max: number,
+  signal?: AbortSignal,
+) {
   const { res } = await fetchPublic(
     stream,
     "stream",
-    AbortSignal.timeout(120000),
+    AbortSignal.any([AbortSignal.timeout(120000), ...(signal ? [signal] : [])]),
   );
   if (Number(res.headers["content-length"]) > max) {
     res.destroy();
@@ -123,12 +128,12 @@ export async function download(stream: string, path: string, max: number) {
       else done(null, chunk);
     },
   });
+  const output = await open(path, "wx", 0o600).catch((err) => {
+    res.destroy();
+    throw err;
+  });
   try {
-    await pipeline(
-      res,
-      limit,
-      createWriteStream(path, { flags: "wx", mode: 0o600 }),
-    );
+    await pipeline(res, limit, output.createWriteStream());
   } catch (err) {
     await unlink(path).catch(() => {});
     throw err;

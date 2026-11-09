@@ -79,6 +79,7 @@ cli
 cli
   .command("analyze <url>")
   .option("--provider <name>")
+  .option("--discard-original", "处理后立即删除原片")
   .option("--model <name>")
   .option("--max-frames <n>", "关键帧上限", Number)
   .action(async (url, o) => {

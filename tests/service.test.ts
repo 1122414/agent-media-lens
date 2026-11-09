@@ -1,5 +1,11 @@
 import { afterEach, expect, it } from "vitest";
-import { mkdtempSync, rmSync, utimesSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  existsSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -67,6 +73,16 @@ it("processes a real silent clip, reads evidence, guards active files and expire
   expect(lens.store.cleanup().removed).toBe(1);
   expect(existsSync(path)).toBe(false);
   expect(lens.result(taskId).schemaVersion).toBe("1.0");
+  const ephemeral = lens.start(url, { discardOriginal: true });
+  expect((await ephemeral.done).status).toBe("COMPLETED");
+  expect(existsSync(lens.store.file(ephemeral.taskId, "source.mp4"))).toBe(
+    false,
+  );
+  symlinkSync(
+    join(c.cacheDir, "missing"),
+    lens.store.file(taskId, "audio.wav"),
+  );
+  expect(() => lens.store.file(taskId, "audio.wav")).toThrow("任务文件无效");
 }, 20000);
 it("rejects traversal and records a provider failure", async () => {
   const lens = new Lens(settings());

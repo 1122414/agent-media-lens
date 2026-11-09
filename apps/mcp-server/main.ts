@@ -59,6 +59,7 @@ server.registerTool(
     inputSchema: z.object({
       url,
       provider,
+      discardOriginal: z.boolean().optional(),
       maxFrames: z.int().min(1).max(120).optional(),
       model: z
         .enum(["auto", "tiny", "base", "small", "medium", "large-v3"])

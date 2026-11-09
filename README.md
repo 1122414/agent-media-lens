@@ -60,6 +60,8 @@ media-lens result "$TASK_ID"
 media-lens cleanup
 ```
 
+For one-shot processing, add --discard-original to analyze or pass discardOriginal: true to media_analyze.
+
 ## Codex and other MCP clients
 
 From the checkout, install the launchers, ensure the desktop app can find media-lens-mcp on PATH, and run:

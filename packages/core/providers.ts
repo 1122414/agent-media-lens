@@ -27,7 +27,10 @@ const content = z.object({
       is_delete: z.literal(false),
       allow_share: z.literal(true),
     }),
-    video_control: z.object({ allow_download: z.literal(true) }).passthrough(),
+    video_control: z.object({
+      allow_download: z.literal(true),
+      prevent_download: z.literal(false).optional(),
+    }),
   }),
 });
 export function normalize(data: unknown) {
@@ -97,6 +100,7 @@ export function evil(c: Config, request = fetch): Provider {
       url.search = new URLSearchParams({
         url: source,
         include_raw: "true",
+        refresh: "true",
         wait: "1",
       }).toString();
       async function read(u: URL) {

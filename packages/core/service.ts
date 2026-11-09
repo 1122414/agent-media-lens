@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, statSync, rmSync } from "node:fs";
 import { z } from "zod";
 import { configSchema, type Config } from "./config.js";
 import { failure, LensError, type Media, type Evidence } from "./contracts.js";
@@ -7,6 +7,7 @@ import { resolveMedia } from "./providers.js";
 import { worker } from "./processing.js";
 import { Store } from "./storage.js";
 const options = z.strictObject({
+  discardOriginal: z.boolean().default(false),
   provider: configSchema.shape.provider.removeDefault().optional(),
   maxFrames: configSchema.shape.maxFrames.removeDefault().optional(),
   model: configSchema.shape.model.removeDefault().optional(),
@@ -58,6 +59,7 @@ export class Lens {
           stream,
           this.store.file(id, "source.mp4"),
           c.maxBytes,
+          controller.signal,
         );
         const evidence = await this.io.worker(
           this.store.dir(id),
@@ -96,6 +98,8 @@ export class Lens {
         writeFileSync(this.store.file(id, "analysis.md"), lines.join("\n"), {
           mode: 0o600,
         });
+        if (opts.discardOriginal)
+          rmSync(this.store.file(id, "source.mp4"), { force: true });
         this.store.transaction(() => {
           const completed = this.store.stage(id, "COMPLETED", { artifacts });
           const result: Result = {
@@ -113,6 +117,8 @@ export class Lens {
           );
         });
       } catch (err) {
+        if (opts.discardOriginal)
+          rmSync(this.store.file(id, "source.mp4"), { force: true });
         this.store.stage(
           id,
           controller.signal.aborted ? "CANCELLED" : "FAILED",
@@ -170,7 +176,10 @@ export class Lens {
           undefined,
         );
     if (!frame) throw new LensError("NOT_FOUND", "关键帧不存在");
-    const bytes = readFileSync(this.store.file(id, frame.imagePath));
+    const path = this.store.file(id, frame.imagePath);
+    if (statSync(path).size > 512000)
+      throw new LensError("INVALID_IMAGE", "图片超限");
+    const bytes = readFileSync(path);
     if (bytes.length > 512000 || bytes[0] !== 255 || bytes[1] !== 216)
       throw new LensError("INVALID_IMAGE", "图片格式或大小无效");
     return {

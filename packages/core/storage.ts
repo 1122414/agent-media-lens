@@ -32,7 +32,7 @@ export class Store {
     mkdirSync(settings.cacheDir, { recursive: true, mode: 0o700 });
     this.root = realpathSync(settings.cacheDir);
     const dbPath = join(this.root, "tasks.sqlite");
-    if (existsSync(dbPath) && lstatSync(dbPath).isSymbolicLink())
+    if (lstatSync(dbPath, { throwIfNoEntry: false })?.isSymbolicLink())
       throw new LensError("UNSAFE_PATH", "数据库路径无效");
     this.db = new DatabaseSync(dbPath);
     this.db.exec(
@@ -67,7 +67,8 @@ export class Store {
   dir(id: string) {
     z.uuid().parse(id);
     const p = join(this.root, id);
-    if (existsSync(p) && realpathSync(p) !== p)
+    const entry = lstatSync(p, { throwIfNoEntry: false });
+    if (entry && !entry.isDirectory())
       throw new LensError("UNSAFE_PATH", "任务目录不是安全路径");
     return p;
   }
@@ -79,7 +80,8 @@ export class Store {
     )
       throw new LensError("UNSAFE_PATH", "文件名无效");
     const p = join(this.dir(id), name);
-    if (existsSync(p) && !lstatSync(p).isFile())
+    const entry = lstatSync(p, { throwIfNoEntry: false });
+    if (entry && !entry.isFile())
       throw new LensError("UNSAFE_PATH", "任务文件无效");
     return p;
   }

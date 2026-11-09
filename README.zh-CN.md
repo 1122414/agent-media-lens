@@ -59,6 +59,7 @@ docker compose run --rm -T --entrypoint node lens dist/apps/mcp-server/main.js
 ## 配置与常见问题
 
 - 用 MEDIA_LENS_CONFIG 指定 JSON 文件，用 MEDIA_LENS_CACHE 覆盖缓存目录，运行 media-lens config 查看生效配置。默认并发 1、时长 600 秒、单文件 500 MB、缓存预算 10 GB、原片保留 7 天。启动新任务或运行 cleanup 时清除过期原片。
+- 单次分析可加 --discard-original，处理结束即清理原片；MCP 对应字段为 discardOriginal。
 - 初始抽帧间隔 4 秒，上限 30 帧；普通 CPU 默认 base/int8。可设置 interval、maxFrames、model、device 和 ocrLang。字段与默认值见[英文配置表](README.md)。
 - 遇到图文作品，identify 可返回 ID，视频分析会返回 UNSUPPORTED_MEDIA。原生适配器目前可解析链接，元数据和下载依赖外部服务。
 - 作品可观看但不可下载时，适配器会拒绝继续。状态缺失、私密、服务凭证失效或访问限制均可能阻止采集。切勿把密钥、Cookie 和原始媒体提交到仓库。
