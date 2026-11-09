@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 COPY tsconfig.json ./
 RUN pnpm build && pnpm install --prod --frozen-lockfile --force
 
-FROM python:3.12-slim-bookworm
+FROM python:3.15-slim-bookworm
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim libgomp1 && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir uv==0.11.17
