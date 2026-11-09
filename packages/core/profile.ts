@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Config } from "./config.js";
 import { failure, LensError } from "./contracts.js";
 import { fetchPublic } from "./network.js";
-import { queryProvider } from "./providers.js";
+import { queryProviderResult } from "./providers.js";
 
 const digits = /^[1-9]\d{0,20}$/;
 const cursor = z.string().regex(/^\d{1,24}$/);
@@ -166,7 +166,7 @@ export async function listProfile(
   c: Config,
   input: string,
   options: z.input<typeof profileOptions> = {},
-  query = queryProvider,
+  query = queryProviderResult,
 ) {
   const o = profileOptions.parse(options),
     p = await identifyProfile(input);
@@ -177,7 +177,7 @@ export async function listProfile(
   const args = { ...params, sec_user_id: p.id };
   async function catalog() {
     const result = mixesPage.parse(
-      await query(c, p.platform, "user/mixes", args),
+      (await query(c, p.platform, "user/mixes", args)).data,
     );
     return {
       items: result.items
@@ -202,7 +202,9 @@ export async function listProfile(
             : { ...params, mix_id: collectionId },
         )
       : await query(c, p.platform, "user/posts", args);
-    const result = postsPage.parse(source);
+    const result = postsPage.parse(source.data);
+    const guestLimited =
+      !collectionId && p.platform === "douyin" && source.guestFallback;
     const all = new Map<string, Item>();
     for (const raw of result.items) {
       const item = post(p, raw);
@@ -215,8 +217,10 @@ export async function listProfile(
       ? offset + items.length < values.length
         ? String(offset + items.length)
         : null
-      : nextCursor(result, o.cursor);
-    return { items, next };
+      : guestLimited
+        ? null
+        : nextCursor(result, o.cursor);
+    return { items, next, guestLimited };
   }
   let view = o.view === "overview" ? "posts" : o.view;
   let collectionId = o.collectionId,
@@ -226,6 +230,7 @@ export async function listProfile(
     collectionListError: string | null = null;
   let items: Item[] = [],
     next: string | null = null;
+  let guestLimited = false;
   if (o.view === "overview") {
     // A space exposes independent resources. A collection is always labelled
     // separately, even if its entries cover every publicly visible post.
@@ -236,7 +241,8 @@ export async function listProfile(
       collections = mixes.value.items;
       collectionCursor = mixes.value.next;
     } else collectionListError = failure(mixes.reason).code;
-    if (uploads.status === "fulfilled") ({ items, next } = uploads.value);
+    if (uploads.status === "fulfilled")
+      ({ items, next, guestLimited } = uploads.value);
     else {
       postListError = failure(uploads.reason).code;
       if (
@@ -256,14 +262,14 @@ export async function listProfile(
     const list = await catalog();
     collections = list.items;
     collectionCursor = list.next;
-  } else ({ items, next } = await works(collectionId));
+  } else ({ items, next, guestLimited } = await works(collectionId));
   if (o.details) {
     const withdrawn = new Set<string>();
     for (const item of items) {
       if (item.stats.likes !== null) continue;
       try {
         const raw = await query(c, p.platform, "video", { url: item.url });
-        const detail = post(p, row.parse(raw));
+        const detail = post(p, row.parse(raw.data));
         if (!detail || detail.id !== item.id) {
           withdrawn.add(item.id);
           continue;
@@ -301,6 +307,7 @@ export async function listProfile(
     collectionId: collectionId ?? null,
     items,
     nextCursor: next,
+    guestLimited,
     collections,
     collectionCursor,
     postListError,

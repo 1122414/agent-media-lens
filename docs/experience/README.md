@@ -10,4 +10,4 @@
 
 [Match a Bilibili player to a part](patterns/bilibili-parts.md) applies to shares with a page query and multi-part post durations. Verified with a 13-part public upload and covered with isolated mismatch, preview and segmented-media tests.
 
-[Author feed coverage and missing metrics](patterns/author-feed-coverage.md) applies when a public video is readable but the creator feed stops or omits likes. Verified for Bilibili with an independently published collection directory; Douyin guest upload refusal was observed.
+[Author feed coverage and missing metrics](patterns/author-feed-coverage.md) applies when a public video is readable but the creator feed stops or omits likes. Verified for Bilibili with an independently published collection directory; Douyin guest upload refusal was observed repeatedly. Limited first-page handling is verified against both v5 response shapes in fixtures.

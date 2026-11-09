@@ -43,11 +43,74 @@ const mix = {
   item_count: 2,
 };
 const page = (items: unknown[], cursor: string | null = null) => ({
-  items,
-  cursor,
-  has_more: Boolean(cursor),
+  data: { items, cursor, has_more: Boolean(cursor) },
+  guestFallback: false,
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+it.each([200, 202])(
+  "marks a Douyin guest preview as partial over HTTP %i",
+  async (status) => {
+    vi.stubEnv("EVIL0CTAL_API_KEY", "fixture-key");
+    const data = {
+      items:
+        status === 200
+          ? [
+              {
+                ...post,
+                platform: "douyin",
+                content_id: "1234567890123456789",
+                author: { uid: douyin.split("/").pop(), nickname: "Public" },
+                stats: { digg_count: 123 },
+              },
+            ]
+          : [],
+      has_more: status === 200,
+      cursor: status === 200 ? "100" : null,
+    };
+    const meta = { guest_fallback: true, internal: "hidden-test-value" };
+    const request = vi.fn();
+    if (status === 200)
+      request.mockResolvedValueOnce(
+        Response.json({ success: true, data, meta }),
+      );
+    else
+      request
+        .mockResolvedValueOnce(
+          Response.json(
+            {
+              success: true,
+              data: { task_id: "00000000-0000-4000-8000-000000000000" },
+            },
+            { status: 202 },
+          ),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            success: true,
+            data: { state: "done", data, result_meta: meta },
+          }),
+        );
+    vi.stubGlobal("fetch", request);
+    const r = await listProfile(config, douyin, { view: "posts" });
+    expect(r).toMatchObject({
+      guestLimited: true,
+      view: "posts",
+      nextCursor: null,
+      postListError: null,
+    });
+    if (status === 200)
+      expect(r.items[0]).toMatchObject({
+        title: "Title",
+        url: "https://www.douyin.com/video/1234567890123456789",
+        stats: { likes: 123 },
+      });
+    else expect(r.items).toHaveLength(0);
+    expect(JSON.stringify(r)).not.toContain("hidden-test-value");
+  },
+);
 it("canonically identifies user profiles and keeps author and video redirect hosts separated", async () => {
   expect(
     (await identifyProfile("看看 " + bili + "/upload/video/?spm_id_from=abc"))
@@ -80,14 +143,18 @@ it("enriches owner-matched public rows with verified detail metrics without retu
       ),
     )
     .mockResolvedValueOnce({
-      ...post,
-      stats: { digg_count: 0, comment_count: 1 },
-      media: { video: { url: "secret" } },
-      fetched_at: "2026-11-09T06:32:00Z",
+      data: {
+        ...post,
+        stats: { digg_count: 0, comment_count: 1 },
+        media: { video: { url: "secret" } },
+        fetched_at: "2026-11-09T06:32:00Z",
+      },
+      guestFallback: false,
     });
   const r = await listProfile(config, bili, { view: "posts" }, q);
   expect(q.mock.calls.map((c) => c[2])).toEqual(["user/posts", "video"]);
   expect(r.nextCursor).toBe("2");
+  expect(r.guestLimited).toBe(false);
   expect(r.items).toHaveLength(1);
   expect(r.items[0]).toMatchObject({
     duration: 4.5,
@@ -221,8 +288,11 @@ it("omits a stale public list entry when later detail reports deletion or a diff
     )
     .mockRejectedValueOnce(new LensError("NOT_FOUND", "removed"))
     .mockResolvedValueOnce({
-      ...post,
-      author: { uid: "999", nickname: "Other" },
+      data: {
+        ...post,
+        author: { uid: "999", nickname: "Other" },
+      },
+      guestFallback: false,
     });
   const result = await listProfile(config, bili, { view: "posts" }, query);
   expect(result.items).toEqual([]);

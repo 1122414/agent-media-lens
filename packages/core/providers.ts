@@ -5,10 +5,14 @@ import { LensError, mediaSchema, type Provider } from "./contracts.js";
 import { normalizeBilibili } from "./bilibili.js";
 import { biliPath, checked, fetchPublic, share } from "./network.js";
 const providerError = z.object({ code: z.string() });
+const resultMeta = z
+  .object({ guest_fallback: z.boolean().optional() })
+  .nullish();
 const envelope = z.object({
   success: z.boolean(),
   data: z.unknown(),
   error: providerError.nullish(),
+  meta: resultMeta,
 });
 const common = z.object({
   kind: z.string(),
@@ -194,7 +198,11 @@ async function readProvider(
         ? new LensError("PROVIDER_REFUSED", "服务未能处理请求")
         : refused,
     );
-  return { status: response.status, data: body.data };
+  return {
+    status: response.status,
+    data: body.data,
+    guestFallback: body.meta?.guest_fallback === true,
+  };
 }
 async function ready(c: Config, request: typeof fetch) {
   try {
@@ -258,13 +266,13 @@ export async function inspectEvil(
     };
   }
 }
-export async function queryProvider(
+export async function queryProviderResult(
   c: Config,
   platform: "douyin" | "bilibili",
   operation: "video" | "user/posts" | "user/mixes" | "mix/posts",
   params: Record<string, string>,
   request = fetch,
-): Promise<unknown> {
+) {
   const key = providerKey(c);
   if (!key)
     throw new LensError("PROVIDER_AUTH", "请在本机配置 EVIL0CTAL_API_KEY");
@@ -273,7 +281,8 @@ export async function queryProvider(
   url.search = new URLSearchParams({ ...params, wait: "1" }).toString();
   const read = (u: URL) => readProvider(u, key, signal, request);
   const initial = await read(url);
-  if (initial.status === 200) return initial.data;
+  if (initial.status === 200)
+    return { data: initial.data, guestFallback: initial.guestFallback };
   const id = z.object({ task_id: z.uuid() }).parse(initial.data).task_id;
   for (let i = 0; i < 40; i++) {
     await delay(750, undefined, { signal });
@@ -283,9 +292,14 @@ export async function queryProvider(
         state: z.enum(["queued", "running", "done", "failed"]),
         data: z.unknown().optional(),
         error: providerError.nullish(),
+        result_meta: resultMeta,
       })
       .parse(r.data);
-    if (task.state === "done") return task.data;
+    if (task.state === "done")
+      return {
+        data: task.data,
+        guestFallback: task.result_meta?.guest_fallback === true,
+      };
     if (task.state === "failed")
       throw providerFailure(
         task.error?.code,
@@ -293,6 +307,11 @@ export async function queryProvider(
       );
   }
   throw new LensError("PROVIDER_TIMEOUT", "上游任务超时");
+}
+export async function queryProvider(
+  ...args: Parameters<typeof queryProviderResult>
+) {
+  return (await queryProviderResult(...args)).data;
 }
 export function evil(c: Config, request = fetch): Provider {
   return {

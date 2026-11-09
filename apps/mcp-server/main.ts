@@ -47,7 +47,7 @@ server.registerTool(
   "media_list_profile",
   {
     description:
-      "Read one public creator profile without a browser. Return posts, canonical URLs, engagement metrics and independently published collections. Check view, postListError and cursors to establish coverage.",
+      "Read one public creator profile without a browser. Return posts, canonical URLs, engagement metrics and independently published collections. Check view, postListError, guestLimited and cursors. A guest-limited Douyin page can omit recent posts even when empty.",
     inputSchema: z.object({ url, ...profileOptions.shape }),
   },
   ({ url, ...options }) =>

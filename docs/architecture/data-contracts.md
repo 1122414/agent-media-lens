@@ -31,6 +31,8 @@ Bilibili video results also use schema 1.1. Media includes the canonical BV iden
 
 Use `view=posts` for uploads, `view=collections` to enumerate collection IDs, and `view=collection` with `collectionId` for one collection's posts by the specified author. For posts pass `nextCursor`. For the collection directory pass `collectionCursor`. Preserve the view, owner, collection and count (1–20) across pages. Bilibili returns a season as one upstream unit, which the client pages locally.
 
+For Douyin uploads, `guestLimited: true` means the service explicitly marked the page as a guest preview. Recent posts may be missing, including when no items were returned. The client keeps verified entries and returns `nextCursor: null` because the next page needs a signed-in identity on v5.1.11. A false flag means no such preview was reported; it does not guarantee a complete catalog.
+
 Counts include likes, views, comments, favorites and shares. A zero is distinct from an unknown count (null). When the list omits likes, detail enrichment can issue one metadata request per returned row; `details: false` or `--list-only` disables it. `statsAt` is the timestamp from the stats-bearing response. In a mixed response individual metrics may be retained from the earlier list. `statsError` reports a failed detail query. No media is downloaded to list a profile.
 
 The CLI and MCP normally read EVIL0CTAL_API_KEY from their environment. A locally provisioned installation using exactly http://127.0.0.1:8000 can also read the checkout's ignored `.cache/provider/platform-reader.env` (single EVIL0CTAL_API_KEY assignment). It must be an owner-only regular file, owned by the current user. A remote or alternate-port provider requires an explicit environment key.

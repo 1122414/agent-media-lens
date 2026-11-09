@@ -24,7 +24,7 @@ media-lens profile "$PROFILE_URL" --view collections
 media-lens profile "$PROFILE_URL" --view collection --collection-id "$COLLECTION_ID"
 ```
 
-每条记录包含作者、作品链接、标题、发布时刻、时长和公开互动数。点赞、播放、评论、收藏或分享未公开时显示 null。默认补查缺失点赞的作品详情，可加 `--list-only` 只读目录。返回 `view=collection` 表示作品来自指定合集，`postListError` 会说明投稿列表是否受限。抖音访客有时只能读取第一页。
+每条记录包含作者、作品链接、标题、发布时刻、时长和公开互动数。点赞、播放、评论、收藏或分享未公开时显示 null。默认补查缺失点赞的作品详情，可加 `--list-only` 只读目录。返回 `view=collection` 表示作品来自指定合集，`postListError` 会说明投稿列表是否受限。抖音结果若标记 `guestLimited: true`，表示这是访客能看到的部分投稿：可能缺少最新作品，且没有可用的下一页。即使此时返回零条，也不能推断作者没有作品。
 
 ## 安装
 
