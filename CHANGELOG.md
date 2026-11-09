@@ -1,5 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.1.0 · 2026-11-09
 
-Public-share identification, optional Evil0ctal v5 integration, local FFmpeg/faster-whisper/Tesseract pipeline, SQLite tasks and retention, CLI, stdio image tools and Codex marketplace plugin. Review [verification status](IMPLEMENTATION_STATUS.md) for release gates.
+- Resolve public Douyin videos with Evil0ctal v5 and identify video or photo shares natively.
+- Analyze visitor playback, preserve the platform save setting and identify the retained media rendition.
+- Run local speech recognition, adaptive frame selection and OCR with timestamped SQLite task evidence.
+- Use the CLI, ten stdio MCP tools and an installable Codex marketplace plugin to write and revisit cited reports.
+
+[Release and acceptance report](docs/releases/v0.1.0.md)

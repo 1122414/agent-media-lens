@@ -1,6 +1,6 @@
 {
   "name": "agent-media-lens",
-  "version": "0.1.0-dev.0",
+  "version": "0.1.0",
   "description": "Understand public Douyin videos locally using timestamped speech, OCR and on-demand frames.",
   "author": {
     "name": "AgentMediaLens contributors"

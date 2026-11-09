@@ -4,7 +4,9 @@ The public repository uses Apache-2.0 and the main branch. Node 24.16, pnpm 11.5
 
 **2026-11-09 verification.** The local Evil0ctal 5.1.11 service returned public details through a complete anonymous guest. The CLI saved a 19.526-second platform download. A separate 28.001-second video had its save button disabled. It completed transcript, frame and OCR processing, and an installed Codex client read actual JPEGs and saved a cited report. An authorized playback export decoded as 1920×1080 H.264/AAC. The English voice lesson and Mandarin software tutorial completed against the actual provider. See [test cases](docs/development/testing.md).
 
-The following entries record earlier stage results.
+The [v0.1.0 report](docs/releases/v0.1.0.md) lists acceptance checks, installation steps and remaining platform limits. Local release checks passed with 38 TypeScript tests, two Python tests, the compiled Docker CLI and Codex plugin 0.1.0 installed and enabled. Public CI and release publication are recorded by GitHub Actions.
+
+## Historical stage results
 
 Phase 1: workspace dependencies locked. Strict build, ESLint and provider tests passed. Native resolution of a real public short link identified a photo note. Live Evil0ctal authorization and video download remain pending. Compose and Colima are now available.
 

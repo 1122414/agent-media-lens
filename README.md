@@ -2,7 +2,7 @@
 
 **Multimodal Media Understanding Infrastructure for AI Agents.** Give Agents the Ability to Understand Media.
 
-[简体中文](README.zh-CN.md) · [Verification status](IMPLEMENTATION_STATUS.md) · [Architecture](ARCHITECTURE.md)
+[简体中文](README.zh-CN.md) · [v0.1.0 report](docs/releases/v0.1.0.md) · [Architecture](docs/architecture/overview.md)
 
 AgentMediaLens accepts public Douyin video links and prepares timestamped speech, keyframes and OCR for a local agent. Codex can request individual JPEGs and write its interpretation to Markdown. The installed Codex plugin analyzed a real 28-second public video, read its images and wrote a time-cited report. Live cases also cover English speech, a Mandarin software tutorial and footage without speech.
 

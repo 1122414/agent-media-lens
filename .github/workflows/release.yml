@@ -19,5 +19,5 @@ jobs:
           test "$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --status success --json conclusion --jq 'length')" -gt 0
           test -s "docs/releases/$GITHUB_REF_NAME.md"
           node scripts/check-plugin.mjs
-          tar -czf agent-media-lens-codex.tgz -C plugins/codex .
+          git archive --format=tar.gz -o agent-media-lens-codex.tgz "$GITHUB_SHA" .agents/plugins/marketplace.json plugins/codex
           gh release create "$GITHUB_REF_NAME" agent-media-lens-codex.tgz --verify-tag --notes-file "docs/releases/$GITHUB_REF_NAME.md"

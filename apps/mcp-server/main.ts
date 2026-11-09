@@ -9,7 +9,7 @@ import { Lens } from "../../packages/core/service.js";
 const lens = new Lens(config());
 const server = new McpServer({
   name: "agent-media-lens",
-  version: "0.1.0-dev.0",
+  version: "0.1.0",
 });
 const taskId = z.uuid(),
   url = z.string().min(1).max(4096),

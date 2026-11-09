@@ -2,7 +2,7 @@
 
 面向 AI Agent 的本地多媒体理解基础设施。输入公开抖音作品链接，获得带时间戳的逐字稿、关键帧、画面文字和 Markdown 分析。已用独立 Codex 客户端分析一条 28 秒的真实作品，读到实际图片并写出带时间戳的报告。中文软件教程、英文口播和无口播素材也已在真实平台验证。详见[实施状态](IMPLEMENTATION_STATUS.md)。
 
-[English](README.md) · [架构图和模块关系](ARCHITECTURE.md) · [技术选型](TECH_STACK.md)
+[English](README.md) · [v0.1.0 验收与安装报告](docs/releases/v0.1.0.md) · [架构图和模块关系](ARCHITECTURE.md) · [技术选型](TECH_STACK.md)
 
 ```mermaid
 flowchart LR
