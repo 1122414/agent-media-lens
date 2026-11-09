@@ -99,7 +99,7 @@ export class Store {
   }
   file(id: string, name: string) {
     if (
-      !/^(\.page-\d{3}\.(?:img|mp4)|source\.mp4|\.?playback\.mp4|audio\.wav|evidence\.json|result\.json|transcript\.json|analysis\.md|f\d{3}\.jpg)$/.test(
+      !/^(\.page-\d{3}\.(?:img|mp4)|source\.mp4|\.?playback\.mp4|audio\.wav|evidence\.json|result\.json|transcript\.json|analysis\.md|(?:study|creative)-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.md|f\d{3}\.jpg)$/.test(
         name,
       )
     )
@@ -155,6 +155,16 @@ export class Store {
       return { removed };
     });
   }
+  ensureSpace(additionalBytes: number) {
+    let used = 0;
+    for (const row of this.db.prepare("SELECT id FROM tasks").all()) {
+      const dir = this.dir(String(row.id));
+      if (existsSync(dir))
+        for (const f of readdirSync(dir)) used += lstatSync(join(dir, f)).size;
+    }
+    if (used + additionalBytes > this.settings.maxDiskBytes)
+      throw new LensError("DISK_LIMIT", "缓存空间不足");
+  }
   create() {
     this.cleanup();
     return this.transaction(() => {
@@ -164,20 +174,12 @@ export class Store {
       );
       if (active >= this.settings.concurrency)
         throw new LensError("BUSY", "并发任务已满");
-      let used = 0;
-      for (const row of this.db.prepare("SELECT id FROM tasks").all()) {
-        const dir = this.dir(String(row.id));
-        if (existsSync(dir))
-          for (const f of readdirSync(dir))
-            used += lstatSync(join(dir, f)).size;
-      }
       const reserve =
         this.settings.maxBytes +
         this.settings.maxFrames * 512000 +
         this.settings.maxSeconds * 32000 +
         8000000;
-      if (used + reserve * (active + 1) > this.settings.maxDiskBytes)
-        throw new LensError("DISK_LIMIT", "缓存空间不足");
+      this.ensureSpace(reserve * (active + 1));
       const id = randomUUID(),
         createdAt = new Date().toISOString();
       const task: Task = {

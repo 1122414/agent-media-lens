@@ -9,5 +9,5 @@ assert.equal(market.plugins[0].name,manifest.name);
 assert.equal(manifest.version,JSON.parse(read("../../package.json")).version);
 assert.equal(JSON.parse(read(manifest.mcpServers)).mcpServers[manifest.name].command,"media-lens-mcp");
 assert.match(read(manifest.skills+"media-understanding/SKILL.md"),/^---\nname: media-understanding\ndescription: [^\n]+\n---/);
-read("skills/media-understanding/references/analysis-template.md");
+for (const ref of ["analysis-template.md", "creative-study.md"]) read("skills/media-understanding/references/" + ref);
 console.log("Plugin manifest, marketplace, skill references and MCP launcher agree.");

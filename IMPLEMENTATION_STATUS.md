@@ -36,3 +36,5 @@ Local plugin 0.4.0 adds public profile browsing for Bilibili and Douyin. A Bilib
 
 
 Local plugin 0.5.0 adds an explicit reserved Douyin profile login. A real stdio MCP client read the Jiuzhaigou author's first page and followed its cursor to the second without a browser: two pages of three distinct public uploads, each with a canonical URL and a numeric like count. Five had platform titles; one was untitled. This verifies that creator and observation time only. [Setup](docs/providers/douyin.md#optional-local-login-for-public-uploads) · [coverage](docs/experience/patterns/author-feed-coverage.md).
+
+Unreleased: genre-adaptive analysis, high-like comparisons and optional original production plans are available in the local plugin. The acceptance used a scenic album, two public opinion videos and a software demonstration. See the [creator-study checks](docs/development/testing.md#unreleased-creator-study-acceptance--2026-11-09).

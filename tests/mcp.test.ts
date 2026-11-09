@@ -57,10 +57,91 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       }),
     );
     const toolNames = (await client.listTools()).tools.map((t) => t.name);
-    expect(toolNames).toHaveLength(11);
+    expect(toolNames).toContain("media_compare_profile");
+    expect(toolNames).toContain("media_save_study");
     expect(toolNames).toContain("media_list_profile");
     const call = (name: string, args: Record<string, unknown>) =>
       client.callTool({ name, arguments: args });
+    for (const [args, expected] of [
+      [{ source: url }, "analysis only"],
+      [{ source: url, intent: "create", target: "  " }, "two to three"],
+      [
+        {
+          source: url,
+          target: "no-face screen tutorial",
+          constraints: "60 seconds",
+        },
+        "original production plan",
+      ],
+    ] as const) {
+      const p = await client.getPrompt({
+        name: "study_media",
+        arguments: { ...args },
+      });
+      expect(p.messages[0].content).toMatchObject({
+        type: "text",
+        text: expect.stringContaining(expected),
+      });
+    }
+    const study = { taskIds: [job.taskId], analysis: "Opening card [S1:f000]" };
+    const report = await call("media_save_study", study);
+    function data(res: typeof report) {
+      expect(res.isError).toBeFalsy();
+      const text = res.content[0];
+      if (text.type !== "text") throw Error("no text");
+      return JSON.parse(text.text);
+    }
+    const baseline = data(report);
+    const english = data(
+      await call("media_save_study", { ...study, language: "en" }),
+    );
+    expect(readFileSync(english.analysisPath, "utf8")).toContain(
+      "## Sources and evidence",
+    );
+    expect(baseline.creativePath).toBeNull();
+    expect(readFileSync(baseline.analysisPath, "utf8")).toContain("0s · f000");
+    const directions = data(
+      await call("media_save_study", {
+        ...study,
+        creative: {
+          directions: [
+            { idea: "A", materials: "A4", opening: "Fold" },
+            { idea: "B", materials: "Pen", opening: "Draw" },
+          ],
+        },
+      }),
+    );
+    expect(directions.mode).toBe("directions");
+    expect(directions.analysisPath).not.toBe(baseline.analysisPath);
+    expect(readFileSync(directions.creativePath, "utf8")).toContain("Fold");
+    const plan = data(
+      await call("media_save_study", {
+        ...study,
+        creative: {
+          target: "不露脸录屏",
+          constraints: "60 秒",
+          title: "试一次",
+          cover: "开始",
+          openings: ["甲", "乙"],
+          shots: [
+            { when: "0–60s", visual: "录屏", audio: "口播", edit: "定格" },
+          ],
+        },
+      }),
+    );
+    expect(readFileSync(plan.creativePath, "utf8")).toContain("60 秒");
+    expect(
+      (
+        await call("media_save_study", {
+          ...study,
+          analysis: "Invented [S1:f999]",
+        })
+      ).isError,
+    ).toBe(true);
+    expect(
+      (await call("media_save_study", { ...study, analysis: "No source" }))
+        .isError,
+    ).toBe(true);
     const a = { taskId: job.taskId };
     for (const name of [
       "media_get_task",

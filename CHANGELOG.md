@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Compare high-like and ordinary posts from an observed creator feed and save evidence-linked studies. Ask for original directions without selecting a genre, or give a free-text brief for a separate production plan.
+
 - Read two or more public Douyin upload pages with an explicitly selected, reserved local login when the platform permits paging. Guest access remains the default.
 
 - Browse public Bilibili and Douyin creator uploads and collections with the CLI and MCP, including canonical links and available engagement metrics.

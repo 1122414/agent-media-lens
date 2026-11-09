@@ -10,6 +10,7 @@ import { inspectEvil, identify } from "../../packages/core/providers.js";
 import { Lens } from "../../packages/core/service.js";
 import { z } from "zod";
 import { listProfile } from "../../packages/core/profile.js";
+import { compareProfile } from "../../packages/core/comparison.js";
 const cli = new Command()
   .name("media-lens")
   .description("理解公开抖音作品和 B 站视频，读取本地证据")
@@ -98,6 +99,23 @@ cli
       process.exitCode = 1;
     }
   });
+cli
+  .command("compare <url>")
+  .description("从实读的作者投稿或指定合集按点赞和形式选对照样本（不下载媒体）")
+  .option("--sample-size <n>", "最多读取的不同作品数（2–60）", Number, 30)
+  .option("--pairs <n>", "最多配对数（1–3）", Number, 3)
+  .option("--collection-id <id>", "只在这个作者合集中选样")
+  .option("--local-login", "仅此次查询使用已配置的抖音本机登录")
+  .action(async (url, o) =>
+    show(
+      await compareProfile(config(), url, {
+        sampleSize: o.sampleSize,
+        pairs: o.pairs,
+        collectionId: o.collectionId,
+        auth: o.localLogin ? "local-login" : "guest",
+      }),
+    ),
+  );
 cli
   .command("profile <url>")
   .description("读取作者公开作品与统计，可分页浏览投稿或合集")

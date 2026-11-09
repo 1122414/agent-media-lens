@@ -1,7 +1,7 @@
 {
   "name": "agent-media-lens",
   "version": "0.5.0",
-  "description": "Understand public Douyin videos, photo albums and Bilibili videos locally using timestamped speech, OCR and on-demand frames.",
+  "description": "Study public Douyin and Bilibili works using local evidence, compare high-like posts with peers, and turn findings into optional original production plans.",
   "author": {
     "name": "AgentMediaLens contributors"
   },
@@ -11,7 +11,7 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "AgentMediaLens",
-    "shortDescription": "Understand public Douyin videos, photo albums and Bilibili videos locally",
+    "shortDescription": "Analyze public works, compare creator posts and plan an original",
     "category": "Productivity"
   }
 }

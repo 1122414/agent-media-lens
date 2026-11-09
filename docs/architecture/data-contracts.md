@@ -12,6 +12,8 @@ Schema 1.0 stores numeric media timestamps in seconds and UTC ISO-8601 task time
 | media_get_frame | taskId, frameId: f000 | JPEG ImageContent; timestamp selects nearest frame |
 | media_get_frames | taskId, start: 4, end: 12, limit: 2 | Up to three labeled JPEGs |
 | media_get_result | taskId, offset: 0, limit: 3 | Metadata, frame index, transcript count and paged OCR |
+| media_compare_profile | Author URL; optional sampleSize, pairs, collectionId, auth | Observed scope and high/ordinary pairs by likes |
+| media_save_study | Completed taskIds, analysis, optional creative and language | Validated evidence index, new report and optional creative document |
 | media_save_analysis | taskId, markdown | Writes analysis.md in the completed task directory |
 | media_cleanup | {} | Number of expired originals deleted |
 
@@ -39,3 +41,9 @@ The CLI and MCP normally read EVIL0CTAL_API_KEY from their environment. A locall
 
 
 For Douyin uploads, an explicit `auth: "local-login"` uses a reserved login on loopback. Omit `auth` for ordinary guest access. Preserve auth and count when passing the returned cursor. Login mode treats overview as uploads only. The output contains `auth`, `pinned` (boolean or unknown/null) for each item, and `visibilityError` when a guest could not verify a candidate. A blank title or zero likes can be a real platform value. Use publication time rather than feed position alone to identify the latest item.
+
+## Creator studies
+
+`media_compare_profile` (CLI: `compare`) samples the first 2–60 distinct returned works from a **single** upload feed or collection; defaults to a limit of 30. It uses at most six pages, preserves the selected view and auth, and does not download media or switch directories mid-sample. Report `observed`, `rankable`, `unknownLikes`, `view`, `collectionId`, `stopped` and `notices`. A terminal cursor is relative to that directory, not proof of a complete account. The upper quarter by observed likes within a format supplies high candidates; remaining middle ranks supply distinct, strictly lower-like controls. Date proximity is preferred, duration breaks ties. Small samples, pinned posts and unequal time to accumulate likes require interpretation. Topic similarity is checked by the agent after viewing.
+
+The optional MCP prompt `study_media(source, intent?, target?, constraints?)` and the plugin skill support analysis only, original directions without a target, or a production plan with a free-text target. The agent reads evidence and writes prose. `media_save_study` checks frame/segment references against 1–6 completed tasks. Pass their IDs in source order, cite `[S1:f000]` or `[S1:t1]` inline, and provide the optional creative payload only for a creation request. It writes uniquely named Markdown under the first task and returns `analysisPath`, `creativePath` (null for analysis only) and mode. It verifies citation existence, not semantic correctness. Existing analysis.md files remain available.

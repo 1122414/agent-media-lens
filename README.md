@@ -16,6 +16,18 @@ flowchart LR
  Agent --> Markdown
 ```
 
+## Analyze a work or make an original
+
+Share a supported public link; there is no required genre or creative brief. If you want to create, describe your target and materials in your own words. Source format and target format can differ.
+
+| Try asking the plugin | Output |
+|---|---|
+| “Analyze this work: [link].” | Evidence-cited analysis of editing, content, viewpoint and possible audience. No creative brief required. |
+| “Compare this creator’s high-like and ordinary posts. I want to make something similar.” | A scoped comparison plus two or three original directions, with material requirements and a first shot for each. |
+| “Use this as a reference for a 60-second software explainer; I only have screen recordings.” | A separate production plan: title, cover, two openings and a timed shot list with visuals, lines/audio, captions and edits. |
+
+Preview the metadata selection with `media-lens compare "$PROFILE_URL" --sample-size 12 --pairs 1`. The connected agent inspects actual frames/transcripts and writes the reports. CLI selection alone does not generate prose or render a video. The MCP prompt `study_media` also accepts optional free-text target and constraints. [Study contract](docs/architecture/data-contracts.md#creator-studies)
+
 ## Creator profiles
 
 Run `media-lens profile "$PROFILE_URL" --count 5` for either platform, or call `media_list_profile` from the plugin. It returns canonical links, titles, upload times, duration and the available engagement counts without opening a browser. Use the returned view and cursor to continue. A collection has a separate scope from all uploads. [Profile contract](docs/architecture/data-contracts.md). For opt-in, browser-free Douyin upload queries with a locally reserved login, see [setup and revocation](docs/providers/douyin.md#optional-local-login-for-public-uploads).
