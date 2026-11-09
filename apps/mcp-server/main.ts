@@ -12,10 +12,18 @@ import {
   comparisonOptions,
 } from "../../packages/core/comparison.js";
 import { saveStudy, studyOptions } from "../../packages/core/study.js";
-const lens = new Lens(config());
+import { appVersion } from "../../packages/core/processing.js";
+const lens = (() => {
+  try {
+    return new Lens(config());
+  } catch (err) {
+    console.error(JSON.stringify(failure(err)));
+    process.exit(1);
+  }
+})();
 const server = new McpServer({
   name: "agent-media-lens",
-  version: "0.5.0",
+  version: appVersion,
 });
 const taskId = z.uuid(),
   url = z.string().min(1).max(4096),
@@ -264,6 +272,9 @@ server.registerTool(
         media: r.media,
         provider: r.provider,
         artifacts: r.artifacts,
+        retained: r.retained,
+        platformDuration: r.platformDuration,
+        fileDuration: r.duration,
         frames: r.frames,
         segmentCount: r.transcript.segments.length,
         ocr: r.ocr.slice(a.offset, a.offset + a.limit),

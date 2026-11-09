@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { config, providerKey } from "../../packages/core/config.js";
 import { failure, LensError } from "../../packages/core/contracts.js";
-import { projectRoot } from "../../packages/core/processing.js";
+import { appVersion, projectRoot } from "../../packages/core/processing.js";
 import { inspectEvil, identify } from "../../packages/core/providers.js";
 import { Lens } from "../../packages/core/service.js";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import { listProfile } from "../../packages/core/profile.js";
 import { compareProfile } from "../../packages/core/comparison.js";
 const cli = new Command()
   .name("media-lens")
+  .version(appVersion)
   .description("理解公开抖音作品和 B 站视频，读取本地证据")
   .option("--json", "输出 JSON（默认）")
   .option("--markdown", "输出 Markdown")

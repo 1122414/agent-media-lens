@@ -7,6 +7,12 @@ export class LensError extends Error {
     super(message);
   }
 }
+export function durationLimit(seconds: number, limit: number) {
+  return new LensError(
+    "DURATION_LIMIT",
+    `时长 ${seconds.toFixed(1)}s 超出上限 ${limit}s；可在 MEDIA_LENS_CONFIG 指定的 JSON 中调整 maxSeconds（最高 3600s）`,
+  );
+}
 export function failure(err: unknown) {
   if (err instanceof LensError) return { code: err.code, message: err.message };
   if (err instanceof z.ZodError)

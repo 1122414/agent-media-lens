@@ -27,16 +27,28 @@ MEDIA_INPUT = [
 FFMPEG = ["ffmpeg", "-nostdin", "-v", "error", "-threads", "2", "-filter_threads", "1"]
 
 
+class WorkerProblem(ValueError):
+    def __init__(self, code: str, **fields: object) -> None:
+        super().__init__(code)
+        self.fields = fields
+
+
 def run(args: list[str], timeout: int = 180) -> bytes:
-    result = subprocess.run(
-        args,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        timeout=timeout,
-        check=True,
-    )
-    return result.stdout
+    try:
+        return subprocess.run(
+            args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+            check=True,
+        ).stdout
+    except FileNotFoundError as exc:
+        raise WorkerProblem("TOOL_MISSING", tool=args[0]) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise WorkerProblem("TOOL_TIMEOUT", tool=args[0]) from exc
+    except subprocess.CalledProcessError as exc:
+        raise WorkerProblem("TOOL_FAILED", tool=args[0]) from exc
 
 
 def event(stage: str) -> None:
@@ -61,8 +73,10 @@ def probe(path: Path, limit: int) -> tuple[float, bool]:
     )
     streams = report["streams"]
     duration = float(report["format"]["duration"])
-    if not math.isfinite(duration) or not 0 < duration <= limit:
-        raise ValueError("DURATION_LIMIT")
+    if not math.isfinite(duration) or duration <= 0:
+        raise ValueError("INVALID_VIDEO")
+    if duration > limit:
+        raise WorkerProblem("DURATION_LIMIT", seconds=duration)
     videos = [
         s
         for s in streams
@@ -228,7 +242,7 @@ def album_frames(
             duration, _ = probe(clip, limit)
             elapsed += duration
             if elapsed > limit:
-                raise ValueError("DURATION_LIMIT")
+                raise WorkerProblem("DURATION_LIMIT", seconds=elapsed)
             samples.extend([(clip, 0.0), (clip, duration * 0.65)])
         if len(rows) + len(samples) > max_frames:
             raise ValueError("IMAGE_LIMIT")
@@ -361,6 +375,9 @@ def main() -> int:
             json.dumps(result, ensure_ascii=False), encoding="utf-8"
         )
         return 0
+    except WorkerProblem as problem:
+        print(json.dumps({"error": str(problem), **problem.fields}), flush=True)
+        return 1
     except (
         OSError,
         RuntimeError,

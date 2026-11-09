@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 import { z } from "zod";
-import { LensError, workerSchema, type Stage } from "./contracts.js";
+import {
+  durationLimit,
+  LensError,
+  workerSchema,
+  type Stage,
+} from "./contracts.js";
 import type { Config } from "./config.js";
 const parent = fileURLToPath(new URL("../../", import.meta.url));
 export const projectRoot = existsSync(
@@ -12,6 +17,9 @@ export const projectRoot = existsSync(
 )
   ? parent
   : fileURLToPath(new URL("../../../", import.meta.url));
+export const appVersion: string = JSON.parse(
+  readFileSync(join(projectRoot, "package.json"), "utf8"),
+).version;
 export function worker(
   dir: string,
   c: Config,
@@ -56,6 +64,8 @@ export function worker(
       },
     );
     let error = "WORKER_FAILED";
+    let detail: LensError | undefined;
+    let lastStage: Stage = "DOWNLOADING";
     function stop() {
       if (child.pid) {
         try {
@@ -88,16 +98,31 @@ export function worker(
     lines.on("line", (line) => {
       try {
         const msg = JSON.parse(line);
-        if (msg.stage)
-          onStage(
-            z
-              .enum([
-                "EXTRACTING_AUDIO",
-                "TRANSCRIBING",
-                "EXTRACTING_FRAMES",
-                "OCR",
-              ])
-              .parse(msg.stage),
+        if (msg.stage) {
+          lastStage = z
+            .enum([
+              "EXTRACTING_AUDIO",
+              "TRANSCRIBING",
+              "EXTRACTING_FRAMES",
+              "OCR",
+            ])
+            .parse(msg.stage);
+          onStage(lastStage);
+        }
+        if (
+          msg.error === "DURATION_LIMIT" &&
+          typeof msg.seconds === "number" &&
+          Number.isFinite(msg.seconds) &&
+          msg.seconds > 0
+        )
+          detail = durationLimit(msg.seconds, c.maxSeconds);
+        if (
+          ["ffmpeg", "ffprobe", "tesseract"].includes(msg.tool) &&
+          ["TOOL_MISSING", "TOOL_FAILED", "TOOL_TIMEOUT"].includes(msg.error)
+        )
+          detail = new LensError(
+            msg.error,
+            `${lastStage}：${msg.tool} ${msg.error === "TOOL_MISSING" ? "未安装或不在 PATH" : msg.error === "TOOL_TIMEOUT" ? "执行超时" : "处理失败"}；请运行 media-lens doctor 检查本机环境`,
           );
         if (
           [
@@ -119,7 +144,15 @@ export function worker(
       clearTimeout(timer);
       signal.removeEventListener("abort", abort);
       if (code !== 0) {
-        fail(new LensError(error, "媒体处理失败，请检查任务阶段与环境"));
+        fail(
+          signal.aborted || error === "WORKER_TIMEOUT"
+            ? new LensError(error, `${lastStage}：任务取消或超时`)
+            : (detail ??
+                new LensError(
+                  error,
+                  `${lastStage}：媒体处理失败，请运行 media-lens doctor 检查环境`,
+                )),
+        );
         return;
       }
       try {

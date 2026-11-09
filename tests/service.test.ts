@@ -94,52 +94,59 @@ it("processes a real silent clip, reads evidence, guards active files and expire
   );
   expect(() => lens.store.file(taskId, "audio.wav")).toThrow("任务文件无效");
 }, 20000);
-it("keeps an authorized playback copy on request and expires it independently of evidence", async () => {
-  const lens = new Lens(settings(), {
-    resolve: async () => ({
-      provider: "test",
-      stream: "public-playback",
-      media: {
-        platform: "douyin",
-        id: "123456789",
-        sourceUrl: url,
-        title: "Test",
-        author: "Test",
-        duration: 2,
-        downloadPermission: "disabled",
-        rendition: "public_playback",
+it.each(["allowed", "disabled"] as const)(
+  "keeps a playback copy only on request (permission %s), then reports its expiry",
+  async (permission) => {
+    const lens = new Lens(settings(), {
+      resolve: async () => ({
+        provider: "test",
+        stream: "public-playback",
+        media: {
+          platform: "douyin",
+          id: "123456789",
+          sourceUrl: url,
+          title: "Test",
+          author: "Test",
+          duration: 2,
+          downloadPermission: permission,
+          rendition: "public_playback",
+        },
+      }),
+      download: async (_url, path) => {
+        writeFileSync(path, "guest rendition");
       },
-    }),
-    download: async (_url, path) => {
-      writeFileSync(path, "guest rendition");
-    },
-    worker: async () => ({
-      duration: 2,
-      transcript: { language: null, text: "", segments: [] },
-      frames: [],
-      ocr: [],
-    }),
-  });
-  stores.push(lens.store);
-  expect(() =>
-    lens.start(url, { keepPlayback: true, discardOriginal: true }),
-  ).toThrow();
-  const ephemeral = lens.start(url);
-  expect((await ephemeral.done).status).toBe("COMPLETED");
-  expect(lens.result(ephemeral.taskId).artifacts.playbackPath).toBeUndefined();
-  expect(existsSync(lens.store.file(ephemeral.taskId, ".playback.mp4"))).toBe(
-    false,
-  );
-  const job = lens.start(url, { keepPlayback: true });
-  expect((await job.done).status).toBe("COMPLETED");
-  const result = lens.result(job.taskId);
-  expect(result.artifacts.playbackPath).toBe("playback.mp4");
-  expect(result.artifacts.sourcePath).toBeUndefined();
-  const path = lens.store.file(job.taskId, result.artifacts.playbackPath);
-  utimesSync(path, new Date(0), new Date(0));
-  expect(lens.store.cleanup().removed).toBe(1);
-  expect(lens.result(job.taskId).artifacts.playbackPath).toBeUndefined();
-});
+      worker: async () => ({
+        duration: 2,
+        transcript: { language: null, text: "", segments: [] },
+        frames: [],
+        ocr: [],
+      }),
+    });
+    stores.push(lens.store);
+    expect(() =>
+      lens.start(url, { keepPlayback: true, discardOriginal: true }),
+    ).toThrow();
+    const ephemeral = lens.start(url);
+    expect((await ephemeral.done).status).toBe("COMPLETED");
+    expect(
+      lens.result(ephemeral.taskId).artifacts.playbackPath,
+    ).toBeUndefined();
+    expect(lens.result(ephemeral.taskId).retained).toBe(false);
+    expect(existsSync(lens.store.file(ephemeral.taskId, ".playback.mp4"))).toBe(
+      false,
+    );
+    const job = lens.start(url, { keepPlayback: true });
+    expect((await job.done).status).toBe("COMPLETED");
+    const result = lens.result(job.taskId);
+    expect(result.artifacts.playbackPath).toBe("playback.mp4");
+    expect(result.retained).toBe(true);
+    expect(result.artifacts.sourcePath).toBeUndefined();
+    const path = lens.store.file(job.taskId, result.artifacts.playbackPath);
+    utimesSync(path, new Date(0), new Date(0));
+    expect(lens.store.cleanup().removed).toBe(1);
+    expect(lens.result(job.taskId).artifacts.playbackPath).toBeUndefined();
+  },
+);
 it("returns public metadata and never retains a playback-only input after decoder failure", async () => {
   const c = settings();
   const lens = new Lens(c, {
@@ -210,4 +217,33 @@ it("recovers abandoned tasks while protecting an active worker group", () => {
   } finally {
     child.kill();
   }
+});
+
+it("reports both durations and the configuration hint before downloading an overlong video", async () => {
+  const c = settings();
+  const lens = new Lens(c, {
+    resolve: async () => ({
+      provider: "fixture",
+      stream: "unused",
+      media: {
+        platform: "douyin",
+        id: "123456789",
+        sourceUrl: url,
+        title: "fixture",
+        author: "test",
+        duration: 601,
+      },
+    }),
+    download: async () => {
+      throw new Error("download must not run");
+    },
+    worker,
+  });
+  stores.push(lens.store);
+  const task = await lens.start(url).done;
+  expect(task.error).toMatchObject({
+    code: "DURATION_LIMIT",
+    message: expect.stringMatching(/601.0s.*600s.*maxSeconds/),
+  });
+  expect(task.stages.map((s) => s.stage)).not.toContain("DOWNLOADING");
 });

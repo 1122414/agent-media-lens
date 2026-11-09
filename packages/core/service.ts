@@ -7,7 +7,13 @@ import {
 } from "node:fs";
 import { z } from "zod";
 import { configSchema, type Config } from "./config.js";
-import { failure, LensError, type Media, type Evidence } from "./contracts.js";
+import {
+  durationLimit,
+  failure,
+  LensError,
+  type Media,
+  type Evidence,
+} from "./contracts.js";
 import { share, download, type AssetKind } from "./network.js";
 import { resolveMedia } from "./providers.js";
 import { worker } from "./processing.js";
@@ -29,7 +35,10 @@ export interface Result extends Evidence {
   schemaVersion: "1.0" | "1.1";
   task: ReturnType<Store["task"]>;
   media: Media;
+  platformDuration?: number | null;
+  fileDuration?: number | null;
   provider: string;
+  retained?: boolean;
   artifacts: Record<string, string>;
 }
 const services = { resolve: resolveMedia, download, worker };
@@ -40,7 +49,23 @@ export class Lens {
     readonly settings: Config,
     private readonly io = services,
   ) {
-    this.store = new Store(settings);
+    try {
+      this.store = new Store(settings);
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException & { errcode?: number };
+      if (
+        ["ENOTDIR", "EISDIR", "EACCES", "EPERM", "EROFS", "EEXIST"].includes(
+          e.code ?? "",
+        ) ||
+        (e.code === "ERR_SQLITE_ERROR" &&
+          [8, 14].includes((e.errcode ?? 0) & 255))
+      )
+        throw new LensError(
+          "CACHE_UNWRITABLE",
+          "无法创建或写入本地任务缓存。请检查目录权限，或用 MEDIA_LENS_CACHE 指定可写目录",
+        );
+      throw err;
+    }
   }
   async resolve(url: string, provider = this.settings.provider) {
     const r = await this.io.resolve(this.settings, url, provider);
@@ -68,7 +93,7 @@ export class Lens {
         controller.signal.throwIfAborted();
         album = Boolean(slides);
         if (media.duration !== null && media.duration > c.maxSeconds)
-          throw new LensError("DURATION_LIMIT", "超出视频时长限制");
+          throw durationLimit(media.duration, c.maxSeconds);
         temporaryPlayback =
           !album &&
           (media.rendition === "public_playback" ||
@@ -177,7 +202,7 @@ export class Lens {
         if (album) this.store.clearAlbumInputs(id);
         else if (
           opts.discardOriginal ||
-          (media.downloadPermission !== "allowed" && !opts.keepPlayback)
+          (temporaryPlayback && !opts.keepPlayback)
         )
           rmSync(this.store.file(id, inputName), { force: true });
         else if (temporaryPlayback) {
@@ -191,6 +216,9 @@ export class Lens {
           const completed = this.store.stage(id, "COMPLETED", { artifacts });
           const result: Result = {
             schemaVersion: album || media.platform !== "douyin" ? "1.1" : "1.0",
+            retained: Boolean(artifacts.sourcePath || artifacts.playbackPath),
+            platformDuration: media.duration,
+            fileDuration: evidence.duration,
             media: { ...media, duration: evidence.duration },
             provider,
             ...evidence,
@@ -267,7 +295,13 @@ export class Lens {
     );
     if (data.schemaVersion !== "1.0" && data.schemaVersion !== "1.1")
       throw new LensError("SCHEMA_VERSION", "当前客户端不支持此版本，请升级");
-    return { ...data, task, artifacts: task.artifacts ?? data.artifacts };
+    const artifacts = task.artifacts ?? data.artifacts;
+    return {
+      ...data,
+      task,
+      artifacts,
+      retained: Boolean(artifacts.sourcePath || artifacts.playbackPath),
+    };
   }
   frames(id: string, start?: number, end?: number, page?: number) {
     const r = this.result(id);
