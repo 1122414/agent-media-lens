@@ -2,7 +2,7 @@
 
 Public repository, default branch main and Apache-2.0 verified. Phase 0 source inspection is complete. Node 24.16, pnpm 11.5, Python 3.12.7, FFmpeg 8.1.1, Git and GitHub CLI are available. Docker CLI is installed, the Compose plugin is missing and Colima is stopped. A local faster-whisper base model cache exists.
 
-**Current release gate (2026-11-09):** local Evil0ctal authentication and guest setup are verified. An authorized test link resolved to a public video and played in a fresh guest browser (28 seconds). The v5 API returned `UPSTREAM_RISK_CONTROL` for that video. No video was downloaded and no transcript, frames, OCR or Markdown were produced for it. Positive live acquisition remains unverified; v0.1.0 is untagged.
+**Current release gate (2026-11-09):** the local Evil0ctal API accepted the read key and the guest import. An authorized test link resolved to a public video and played in a fresh guest browser (28 seconds). The v5 API returned `UPSTREAM_RISK_CONTROL`. Its request log recorded a native-signed detail request, HTTP 403 and `signature.refused`. The imported guest lacked the native signer’s visitor ID. The request stopped before any creator download-permission check. No video was downloaded and no transcript, frames, OCR or Markdown were produced for it. Positive live acquisition remains unverified; v0.1.0 is untagged.
 
 The following entries record earlier stage results.
 
