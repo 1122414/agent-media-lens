@@ -1,0 +1,17 @@
+{
+  "name": "agent-media-lens",
+  "version": "0.1.0-dev.0",
+  "description": "Understand public Douyin videos locally using timestamped speech, OCR and on-demand frames.",
+  "author": {
+    "name": "AgentMediaLens contributors"
+  },
+  "homepage": "https://github.com/1122414/agent-media-lens",
+  "license": "Apache-2.0",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "AgentMediaLens",
+    "shortDescription": "Understand public Douyin videos locally",
+    "category": "Productivity"
+  }
+}

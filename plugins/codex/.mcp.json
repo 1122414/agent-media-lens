@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "agent-media-lens": {
+      "command": "media-lens-mcp",
+      "env_vars": [
+        "MEDIA_LENS_CONFIG",
+        "MEDIA_LENS_CACHE",
+        "MEDIA_LENS_PYTHON",
+        "EVIL0CTAL_ENDPOINT",
+        "EVIL0CTAL_API_KEY"
+      ]
+    }
+  }
+}

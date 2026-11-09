@@ -1,0 +1,20 @@
+{
+  "name": "agent-media-lens-local",
+  "interface": {
+    "displayName": "AgentMediaLens"
+  },
+  "plugins": [
+    {
+      "name": "agent-media-lens",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+import {readFileSync} from "node:fs";
+import assert from "node:assert/strict";
+const root=new URL("../plugins/codex/",import.meta.url);
+const read=(path)=>readFileSync(new URL(path,root),"utf8");
+const manifest=JSON.parse(read(".codex-plugin/plugin.json"));
+const market=JSON.parse(read("../../.agents/plugins/marketplace.json"));
+assert.equal(market.plugins[0].source.path,"./plugins/codex");
+assert.equal(market.plugins[0].name,manifest.name);
+assert.equal(manifest.version,JSON.parse(read("../../package.json")).version);
+assert.equal(JSON.parse(read(manifest.mcpServers)).mcpServers[manifest.name].command,"media-lens-mcp");
+assert.match(read(manifest.skills+"media-understanding/SKILL.md"),/^---\nname: media-understanding\ndescription: [^\n]+\n---/);
+read("skills/media-understanding/references/analysis-template.md");
+console.log("Plugin manifest, marketplace, skill references and MCP launcher agree.");
