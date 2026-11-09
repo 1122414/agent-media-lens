@@ -84,7 +84,14 @@ docker compose run --rm lens --help
 docker compose run --rm -T --entrypoint node lens dist/apps/mcp-server/main.js
 ```
 
-The core has no published port. Files and models persist in the media-data volume. From a container, loopback addresses the container itself. Configure an operator-controlled HTTPS provider reachable from the container for live processing. On Homebrew installations with the standalone Compose binary, substitute `docker-compose`.
+The core has no published port. Files and models persist in the media-data volume. For a remote provider, set an operator-controlled HTTPS endpoint reachable from the container. If both services run on the **same Docker engine**, [start the local provider](docs/providers/douyin.md), export its read-only API key, then run:
+
+```sh
+export LENS_PROVIDER_CONTAINER="$(docker compose -f providers/douyin/compose.yaml ps --status running -q api)"
+docker compose -f compose.yaml -f compose.local-provider.yaml run --rm -T lens doctor
+```
+
+The override makes loopback reach the running API by sharing its network namespace. It grants no access to the API filesystem or its credentials and publishes no additional port. Repeat the lookup if the API container is recreated. On Homebrew installations with the standalone Compose binary, substitute `docker-compose`.
 
 ## FAQ
 

@@ -54,7 +54,14 @@ docker compose run --rm lens --help
 docker compose run --rm -T --entrypoint node lens dist/apps/mcp-server/main.js
 ```
 
-容器将素材和模型保存在 media-data 卷。容器内的 127.0.0.1 指向容器自身，真实处理需提供容器可达的受信 HTTPS 采集服务。Homebrew 单独安装 Compose 时，可用 docker-compose。
+容器将素材和模型保存在 media-data 卷。若使用远程服务，请配置容器可达的受信 HTTPS 地址。若 Core 与采集服务使用**同一 Docker 引擎**，按[部署说明](docs/providers/douyin.md)启动采集服务，把只读密钥设为环境变量后执行：
+
+```sh
+export LENS_PROVIDER_CONTAINER="$(docker compose -f providers/douyin/compose.yaml ps --status running -q api)"
+docker compose -f compose.yaml -f compose.local-provider.yaml run --rm -T lens doctor
+```
+
+该配置让 Core 与 API 共享网络，因此回环地址能直接访问 API，无需开放新端口。两者的文件系统和凭证仍然独立。API 容器重建后须重新获取 ID。Homebrew 单独安装 Compose 时，可用 `docker-compose` 替代 `docker compose`。
 
 ## 配置与常见问题
 

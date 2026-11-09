@@ -28,4 +28,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate optional local provider configuration
+        run: LENS_PROVIDER_CONTAINER=validation-only docker compose -f compose.yaml -f compose.local-provider.yaml config --quiet
       - run: docker compose config --quiet && docker compose build && docker compose run --rm lens --help

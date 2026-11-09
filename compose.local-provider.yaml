@@ -1,0 +1,6 @@
+# Use with compose.yaml and the API container from providers/douyin/compose.yaml.
+services:
+  lens:
+    network_mode: "container:${LENS_PROVIDER_CONTAINER:?Set LENS_PROVIDER_CONTAINER to the running local provider API container ID}"
+    environment:
+      EVIL0CTAL_ENDPOINT: http://127.0.0.1:8000
