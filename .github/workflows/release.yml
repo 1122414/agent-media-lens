@@ -1,0 +1,22 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Confirm release evidence and package plugin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          test "$(node -p 'require("./plugins/codex/.codex-plugin/plugin.json").version')" = "${GITHUB_REF_NAME#v}"
+          test "$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --status success --json conclusion --jq 'length')" -gt 0
+          test -s "docs/releases/$GITHUB_REF_NAME.md"
+          node scripts/check-plugin.mjs
+          tar -czf agent-media-lens-codex.tgz -C plugins/codex .
+          gh release create "$GITHUB_REF_NAME" agent-media-lens-codex.tgz --verify-tag --notes-file "docs/releases/$GITHUB_REF_NAME.md"

@@ -1,0 +1,14 @@
+.git
+.venv
+node_modules
+dist
+.env*
+**/__pycache__
+**/*.mp4
+**/*.wav
+**/*.sqlite*
+.cache
+.mypy_cache
+.pytest_cache
+.ruff_cache
+providers/douyin/.upstream

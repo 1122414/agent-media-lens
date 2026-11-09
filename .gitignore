@@ -16,3 +16,5 @@ __pycache__/
 *.wav
 *.bin
 *.log
+
+providers/douyin/.upstream/

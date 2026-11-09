@@ -1,0 +1,31 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --frozen --python 3.12
+      - run: pnpm build && pnpm lint && pnpm test
+      - run: uv run --frozen ruff check workers tests/test_worker.py && uv run --frozen mypy workers && uv run --frozen pytest -q tests/test_worker.py
+      - run: node scripts/check-plugin.mjs
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose config --quiet && docker compose build && docker compose run --rm lens --help

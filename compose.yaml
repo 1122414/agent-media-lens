@@ -1,0 +1,17 @@
+name: agent-media-lens
+services:
+  lens:
+    build: .
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - media-data:/data
+    environment:
+      EVIL0CTAL_ENDPOINT: ${EVIL0CTAL_ENDPOINT:-http://127.0.0.1:8000}
+      EVIL0CTAL_API_KEY: ${EVIL0CTAL_API_KEY:-}
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+volumes:
+  media-data: {}

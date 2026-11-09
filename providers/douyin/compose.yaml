@@ -1,0 +1,5 @@
+name: agent-media-lens-provider
+include:
+  - path: ./.upstream/docker/compose.yml
+    project_directory: ./.upstream/docker
+    env_file: ./.upstream/.env
