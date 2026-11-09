@@ -1,0 +1,17 @@
+[project]
+name = "agent-media-lens-worker"
+version = "0.1.0.dev0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["faster-whisper>=1.2,<2"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.12", "mypy>=1.15"]
+
+[tool.uv]
+package = false
+
+[tool.mypy]
+strict = true
+[[tool.mypy.overrides]]
+module = ["faster_whisper.*","ctranslate2.*"]
+ignore_missing_imports = true
