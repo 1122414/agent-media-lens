@@ -51,7 +51,7 @@ media-lens profile "$PROFILE_URL" --local-login --view posts --count 3 --cursor 
 
 ## 安装
 
-准备 Node 24.12+（24.x）、pnpm 11.5、Python 3.12、uv、FFmpeg、ffprobe 和 Tesseract。OCR 需要 chi_sim 与 eng 语言包。第一次转写会按需下载模型，可提前准备缓存。
+准备 Node 24（24.12+）或 26、pnpm 11.5、Python 3.12、uv、FFmpeg、ffprobe 和 Tesseract。OCR 需要 chi_sim 与 eng 语言包。第一次转写会按需下载模型，可提前准备缓存。
 
 ```sh
 git clone https://github.com/1122414/agent-media-lens.git

@@ -1,8 +1,8 @@
 # Technology decisions
 
-Node 24 LTS supplies native SQLite, streams and subprocesses. TypeScript runs in strict mode. Zod validates input and worker results. The official MCP SDK offers stdio and image content. Commander supplies CLI parsing. Vitest and ESLint verify the TypeScript layer.
+Node 24 (24.12+) and 26 supply native SQLite, streams and subprocesses. TypeScript runs in strict mode. Zod validates input and worker results. The official MCP SDK offers stdio and image content. Commander supplies CLI parsing. Vitest and ESLint verify the TypeScript layer.
 
-Python 3.12 runs faster-whisper on CTranslate2. Prefer CPU int8 on this Mac and probe CUDA on compatible devices. FFmpeg decodes audio and frames. Tesseract has both English and Simplified Chinese data on the development host. Model weights stay outside Git. Pytest, Ruff and mypy check the worker.
+The Docker image uses a Python 3.15 base and a separate Python 3.12 worker environment. Python 3.12 runs faster-whisper on CTranslate2. Prefer CPU int8 on this Mac and probe CUDA on compatible devices. FFmpeg decodes audio and frames. Tesseract has both English and Simplified Chinese data on the development host. Model weights stay outside Git. Pytest, Ruff and mypy check the worker.
 
 ## Upstream contract
 

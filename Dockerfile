@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS js
+FROM node:26-bookworm-slim AS js
 WORKDIR /app
 RUN npm install -g pnpm@11.5.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -8,12 +8,14 @@ RUN pnpm install --frozen-lockfile
 COPY tsconfig.json ./
 RUN pnpm build && pnpm install --prod --frozen-lockfile --force
 
-FROM python:3.12-slim-bookworm
+FROM python:3.15-slim-bookworm
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim libgomp1 libatomic1 && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir uv==0.11.17
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-cache
+# The locked ASR stack needs 3.12. Keep its interpreter accessible to the lens user.
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
+RUN uv sync --python 3.12 --frozen --no-dev --no-cache
 COPY --from=js /usr/local/bin/node /usr/local/bin/node
 COPY --from=js /app/node_modules ./node_modules
 COPY --from=js /app/dist ./dist
