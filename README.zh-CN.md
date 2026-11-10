@@ -63,7 +63,7 @@ cd agent-media-lens
 |---|---|
 | 识别链接；读本次安装已有任务的画面、口播和报告 | 不需要采集服务。Docker 任务存储在独立的命名卷。 |
 | 分析新抖音、B 站作品；查询抖音作者投稿 | 另需 Evil0ctal v5、对应平台只读密钥和可用访客。自建服务包含 PostgreSQL、Redis 和 Worker。 |
-| 查询 B 站公开主页、合集目录 | 走 B 站公开接口，平台可能限制返回范围。 |
+| 查询 B 站公开主页、合集目录 | 同样需要 Evil0ctal、`bilibili:read` 密钥和 B 站访客。只查目录不下载视频，平台可能限制返回范围。 |
 | **Experimental / 实验性** 小红书 | 需要访客能读取的原始分享，不用账号或 Evil0ctal。遇登录即停止，正向真机取帧仍待验证。 |
 
 已有服务：向 CLI/MCP 进程配置可信 HTTPS 的 `EVIL0CTAL_ENDPOINT` 和 `EVIL0CTAL_API_KEY`。要自建：运行 `./media-lens install --provider`（此引导脚本另需 Git、Python 3），按[采集服务说明](docs/providers/douyin.md)完成所有者设置、导入访客、签发只读密钥。用 `./media-lens doctor --platform douyin` 或 `bilibili` 单独验收。首次构建和模型下载需要网络。[非 Docker 的开发者安装](docs/development/setup.md)。

@@ -43,7 +43,7 @@ The installer builds a local image, checks speech/OCR/media tools, links CLI and
 |---|---|
 | Recognize a link; read existing task evidence in this installation | No acquisition service. Docker jobs live in a named volume. |
 | Analyze a new Douyin or Bilibili work; query Douyin creator uploads | Evil0ctal v5, a scoped reader key and a usable guest for the platform. A self-hosted deployment includes PostgreSQL, Redis and workers. |
-| Browse public Bilibili creator/collection metadata | Public endpoints; the platform may restrict results. |
+| Browse public Bilibili creator/collection metadata | The same Evil0ctal service with `bilibili:read` and a Bilibili guest. Catalog reads do not download videos; the platform may restrict results. |
 | **Experimental** Xiaohongshu | A guest-readable original share, no Evil0ctal or account. Stops at login; live positive frame acceptance is pending. |
 
 Already have a reader? Supply `EVIL0CTAL_ENDPOINT` (trusted HTTPS origin) and `EVIL0CTAL_API_KEY` to the CLI/MCP process. To self-host, run `./media-lens install --provider` (bootstrap also needs Git and Python 3), then follow the [owner, guest and key setup](docs/providers/douyin.md). Check `./media-lens doctor --platform douyin` or `bilibili`. Initial build/model downloads need network access. [Native developer install](docs/development/setup.md).
