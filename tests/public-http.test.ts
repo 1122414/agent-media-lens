@@ -194,3 +194,100 @@ it("CLI emits opt-in provider and timed stage events, preserving JSON stdout", (
     rmSync(cache, { recursive: true, force: true });
   }
 });
+
+it("sends the fixed Douyin referer to its video CDN only, recomputing it on redirects", async () => {
+  reply(302, { location: "https://www.douyin.com/play" });
+  reply(200);
+  const { res } = await fetchPublic(signed, "stream", fresh());
+  res.destroy();
+  expect(get.mock.calls.map((c) => c[1].headers.referer)).toEqual([
+    "https://www.douyin.com/",
+    undefined,
+  ]);
+});
+
+it.each([
+  ["mirror", 2, 1, "COMPLETED"],
+  ["refresh", 3, 2, "COMPLETED"],
+  ["all-denied", 3, 2, "FAILED"],
+  ["refresh-duplicate", 2, 2, "FAILED"],
+  ["refresh-permission-change", 2, 2, "FAILED"],
+  ["refresh-different-post", 2, 2, "FAILED"],
+  ["401", 1, 1, "FAILED"],
+  ["non-cdn-403", 1, 1, "FAILED"],
+] as const)(
+  "recovers only matching public renditions: %s",
+  async (mode, attempts, resolves, status) => {
+    const cache = mkdtempSync(join(tmpdir(), "lens-cdn-"));
+    const url = "https://www.douyin.com/video/123456789";
+    const media = {
+      id: "123456789",
+      platform: "douyin" as const,
+      sourceUrl: url,
+      title: "t",
+      author: "a",
+      duration: 1,
+      rendition: "public_playback" as const,
+      downloadPermission: "disabled" as const,
+    };
+    const primary =
+      mode === "non-cdn-403" ? "https://www.douyin.com/play" : signed;
+    const resolve = vi
+      .fn()
+      .mockResolvedValueOnce({
+        media,
+        provider: "evil0ctal",
+        stream: primary,
+        alternateStreams: [signed + "2"],
+      })
+      .mockResolvedValue({
+        media: {
+          ...media,
+          ...(mode === "refresh-permission-change"
+            ? { downloadPermission: "allowed" }
+            : mode === "refresh-different-post"
+              ? { id: "999999999" }
+              : {}),
+        },
+        provider: "evil0ctal",
+        stream: mode === "refresh-duplicate" ? signed : signed + "3",
+      });
+    const lens = new Lens(configSchema.parse({ cacheDir: cache }), {
+      download,
+      resolve,
+      worker: async () => ({
+        duration: 1,
+        transcript: { language: null, text: "", segments: [] },
+        frames: [],
+        ocr: [],
+      }),
+    });
+    try {
+      for (let i = 0; i < attempts; i++)
+        reply(
+          mode === "401"
+            ? 401
+            : i === attempts - 1 && status === "COMPLETED"
+              ? 200
+              : 403,
+        );
+      const job = lens.start(url),
+        task = await job.done;
+      expect(task.status).toBe(status);
+      expect(resolve).toHaveBeenCalledTimes(resolves);
+      expect(get.mock.calls.map((c) => c[0].href)).toEqual(
+        [primary, signed + "2", signed + "3"].slice(0, attempts),
+      );
+      expect(sleep).not.toHaveBeenCalled();
+      if (status === "COMPLETED") {
+        expect(lens.result(job.taskId).retained).toBe(false);
+        expect(JSON.stringify(lens.result(job.taskId))).not.toContain(
+          "DO_NOT_LOG",
+        );
+      } else expect(task.error?.code).toBe("HTTP_ACCESS_DENIED");
+    } finally {
+      lens.store.db.close();
+      rmSync(cache, { recursive: true, force: true });
+    }
+  },
+);

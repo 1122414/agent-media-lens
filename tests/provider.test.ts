@@ -184,10 +184,7 @@ it.each([
 ])(
   "refuses a %s credential before checking pool capacity",
   async (kind, code) => {
-    vi.stubEnv(
-      "EVIL0CTAL_API_KEY",
-      kind === "missing" ? "" : "test-only",
-    );
+    vi.stubEnv("EVIL0CTAL_API_KEY", kind === "missing" ? "" : "test-only");
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response())
@@ -265,3 +262,34 @@ it.each([
     expect(request).toHaveBeenCalledTimes(status === 202 ? 2 : 1);
   },
 );
+
+it("keeps bounded, validated alternatives within the selected rendition", () => {
+  const primary = data.media.video.url,
+    mirror = "https://m.douyinvod.com/b";
+  const candidate = {
+    ...data,
+    media: {
+      video: {
+        url: primary,
+        urls: [
+          primary + "#fragment",
+          "https://127.0.0.1/",
+          mirror,
+          mirror,
+          primary + "?b",
+          primary + "?c",
+        ],
+      },
+    },
+  };
+  expect(normalize(candidate).alternateStreams).toEqual([
+    mirror,
+    primary + "?b",
+  ]);
+  const entitled = normalize({
+    ...candidate,
+    raw: { ...data.raw, video: address },
+  });
+  expect(entitled.stream).toBe(address.download_addr.url_list[0]);
+  expect(entitled.alternateStreams).toBeUndefined();
+});

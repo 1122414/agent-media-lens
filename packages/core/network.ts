@@ -16,6 +16,8 @@ const pages = [
   "www.douyin.com.cn",
 ];
 const cdns = ["douyinvod.com", "zjcdn.com", "douyin.com", "amemv.com"];
+export const isDouyinVod = (host: string) =>
+  host === "douyinvod.com" || host.endsWith(".douyinvod.com");
 const biliPages = [
   "www.bilibili.com",
   "m.bilibili.com",
@@ -285,7 +287,9 @@ async function requestPublicOnce(
               "user-agent": "Mozilla/5.0 AgentMediaLens/0.3",
               ...(kind === "bili-stream"
                 ? { referer: "https://www.bilibili.com/" }
-                : {}),
+                : kind === "stream" && isDouyinVod(url.hostname)
+                  ? { referer: "https://www.douyin.com/" }
+                  : {}),
             },
           },
           ok,

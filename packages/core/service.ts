@@ -11,11 +11,19 @@ import {
   durationLimit,
   failure,
   LensError,
+  PublicHttpError,
+  type Candidate,
   type Media,
   type Evidence,
 } from "./contracts.js";
 import { trace } from "./diagnostics.js";
-import { share, download, retryPublicRead, type AssetKind } from "./network.js";
+import {
+  share,
+  download,
+  retryPublicRead,
+  isDouyinVod,
+  type AssetKind,
+} from "./network.js";
 import { resolveMedia } from "./providers.js";
 import { worker } from "./processing.js";
 import { Store } from "./storage.js";
@@ -88,7 +96,7 @@ export class Lens {
     const done = (async () => {
       try {
         this.store.stage(id, "RESOLVING");
-        const { media, stream, provider, slides } = await this.io.resolve(
+        const candidate = await this.io.resolve(
           c,
           source,
           c.provider,
@@ -96,6 +104,7 @@ export class Lens {
           () => this.markRetry(id),
         );
         controller.signal.throwIfAborted();
+        const { media, stream, provider, slides } = candidate;
         album = Boolean(slides);
         trace({
           event: "rendition",
@@ -156,18 +165,33 @@ export class Lens {
               "作品详情可读，但访客未获得可用媒体",
             );
           this.store.stage(id, "DOWNLOADING");
-          await this.transfer(
-            id,
-            stream,
-            this.store.file(id, inputName),
-            c.maxBytes,
-            controller.signal,
-            media.platform === "xiaohongshu"
-              ? "xhs-stream"
-              : media.platform === "bilibili"
-                ? "bili-stream"
-                : "stream",
-          );
+          const path = this.store.file(id, inputName);
+          if (
+            media.platform === "douyin" &&
+            provider === "evil0ctal" &&
+            media.rendition
+          ) {
+            await this.transferDouyinVideo(
+              id,
+              candidate,
+              path,
+              c,
+              controller.signal,
+            );
+          } else {
+            await this.transfer(
+              id,
+              stream,
+              path,
+              c.maxBytes,
+              controller.signal,
+              media.platform === "xiaohongshu"
+                ? "xhs-stream"
+                : media.platform === "bilibili"
+                  ? "bili-stream"
+                  : "stream",
+            );
+          }
         }
         const evidence = await this.io.worker(
           this.store.dir(id),
@@ -281,6 +305,76 @@ export class Lens {
       return this.store.task(id);
     })();
     return { taskId: id, done };
+  }
+  private async transferDouyinVideo(
+    id: string,
+    candidate: Candidate,
+    path: string,
+    c: Config,
+    signal: AbortSignal,
+  ) {
+    const media = candidate.media;
+    const urls = (r: Candidate) =>
+      [...new Set([r.stream, ...(r.alternateStreams ?? [])])].filter(
+        (u): u is string => Boolean(u),
+      );
+    const attempted = new Set<string>();
+    let queue = urls(candidate).slice(0, 3);
+    let refreshed = false;
+    for (;;) {
+      const url = queue.shift();
+      if (!url) throw new LensError("MEDIA_WITHHELD", "未获得可用媒体");
+      attempted.add(url);
+      try {
+        await this.transfer(id, url, path, c.maxBytes, signal);
+        return;
+      } catch (err) {
+        if (
+          !(err instanceof PublicHttpError) ||
+          err.httpStatus !== 403 ||
+          !isDouyinVod(err.hostname)
+        )
+          throw err;
+        signal.throwIfAborted();
+        if (!queue.length && !refreshed) {
+          refreshed = true;
+          const next = await this.io.resolve(
+            c,
+            media.sourceUrl,
+            "evil0ctal",
+            signal,
+          );
+          signal.throwIfAborted();
+          if (
+            next.provider !== "evil0ctal" ||
+            next.media.platform !== media.platform ||
+            next.media.id !== media.id ||
+            next.media.rendition !== media.rendition ||
+            next.media.downloadPermission !== media.downloadPermission ||
+            next.slides
+          )
+            throw err;
+          if (
+            next.media.duration !== null &&
+            next.media.duration > c.maxSeconds
+          )
+            throw durationLimit(next.media.duration, c.maxSeconds);
+          queue = urls(next)
+            .filter((u) => !attempted.has(u))
+            .slice(0, 1);
+        }
+        if (!queue.length) throw err;
+        this.markRetry(id);
+        trace({
+          event: "retry",
+          code: refreshed ? "CDN_REFRESH" : "CDN_ALTERNATE",
+          hostname: err.hostname,
+          httpStatus: 403,
+          attempt: attempted.size + 1,
+          delayMs: 0,
+        });
+      }
+    }
   }
   private async transfer(
     id: string,

@@ -87,10 +87,11 @@ export interface Candidate {
   media: Media;
   slides?: { poster: string; clip?: string }[];
   stream: string | null;
+  alternateStreams?: string[]; // Internal: same rendition only; never serialize signed URLs.
 }
 export interface Provider {
   name: string;
-  resolve(url: string): Promise<Candidate>;
+  resolve(url: string, signal?: AbortSignal): Promise<Candidate>;
   health(): Promise<boolean>;
 }
 export const stages = [

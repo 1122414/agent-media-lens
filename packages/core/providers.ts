@@ -37,7 +37,9 @@ const content = z.object({
   author: z.object({ nickname: z.string() }),
   duration_ms: z.number().nullish(),
   media: z.object({
-    video: z.object({ url: z.string() }).nullish(),
+    video: z
+      .object({ url: z.string(), urls: z.array(z.string()).optional() })
+      .nullish(),
     images: z.unknown().optional(),
   }),
   raw: z.object({
@@ -123,6 +125,26 @@ export function normalize(
   const download =
     permission === "allowed" && v.raw.video?.download_addr?.url_list[0];
   const selected = download || playback;
+  const streamUrl = (input: string) => {
+    const url = checked(input, "stream");
+    url.hash = ""; // fragments are not part of the HTTP request
+    return url.href;
+  };
+  const primary = selected ? streamUrl(selected) : null;
+  const alternatives = new Set<string>();
+  const urls = download
+    ? v.raw.video?.download_addr?.url_list
+    : v.media.video?.urls;
+  for (const url of urls ?? []) {
+    try {
+      const candidate = streamUrl(url);
+      if (candidate !== primary) alternatives.add(candidate);
+      if (alternatives.size === 2) break;
+    } catch (err) {
+      // A malformed optional mirror must not disable a valid primary.
+      if (!(err instanceof LensError)) throw err;
+    }
+  }
   return {
     media: mediaSchema.parse({
       id: v.content_id,
@@ -138,7 +160,8 @@ export function normalize(
           : undefined,
       duration: v.duration_ms == null ? null : v.duration_ms / 1000,
     }),
-    stream: selected ? checked(selected, "stream").href : null,
+    stream: primary,
+    ...(alternatives.size ? { alternateStreams: [...alternatives] } : {}),
   };
 }
 async function payload(response: Response, limit: number) {
@@ -285,6 +308,7 @@ export async function queryProviderResult(
   params: Record<string, string>,
   request = fetch,
   auth: "guest" | "local-login" = "guest",
+  outerSignal?: AbortSignal,
 ) {
   if (
     auth === "local-login" &&
@@ -310,7 +334,10 @@ export async function queryProviderResult(
   const key = login?.apiKey ?? providerKey(c);
   if (!key)
     throw new LensError("PROVIDER_AUTH", "请在本机配置 EVIL0CTAL_API_KEY");
-  const signal = AbortSignal.timeout(45000);
+  const timeout = AbortSignal.timeout(45000);
+  const signal = outerSignal
+    ? AbortSignal.any([outerSignal, timeout])
+    : timeout;
   const url = new URL("/api/v1/" + platform + "/" + operation, c.endpoint);
   url.search = new URLSearchParams({
     ...params,
@@ -428,7 +455,7 @@ export function evil(c: Config, request = fetch): Provider {
   return {
     name: "evil0ctal",
     health: () => ready(c, request),
-    async resolve(input) {
+    async resolve(input, signal) {
       const source = share(input);
       if (xhsPage(new URL(source).hostname))
         throw new LensError("UNSUPPORTED", "小红书分享仅由原生访客适配器读取");
@@ -442,6 +469,8 @@ export function evil(c: Config, request = fetch): Provider {
         "video",
         { url: source, include_raw: "true", refresh: "true" },
         request,
+        "guest",
+        signal,
       );
       return normalizeResult(data, source);
     },
@@ -523,7 +552,7 @@ export async function resolveMedia(
   const link = await identify(source, signal, onRetry);
   const selected = provider === "evil0ctal" ? evil(c) : native;
   try {
-    const found = await selected.resolve(link.url);
+    const found = await selected.resolve(link.url, signal);
     if (
       found.media.platform !== link.platform ||
       (link.platform === "douyin" && found.media.id !== link.id)
@@ -531,6 +560,7 @@ export async function resolveMedia(
       throw new LensError("PROVIDER_PROTOCOL", "作品标识不匹配");
     return { ...found, provider: selected.name };
   } catch (e) {
+    signal?.throwIfAborted();
     if (
       selected !== native &&
       c.fallback &&
