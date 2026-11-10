@@ -4,6 +4,8 @@
 
 [Separating recognition from visual evidence](patterns/recognition-evidence.md) applies when a missing model hides usable frames, confidence conflicts with the visible image, or change-driven sampling misses the close. Verified with offline model isolation and three video samples; there is no measured dialect accuracy improvement.
 
+The same [recognition evidence](patterns/recognition-evidence.md) records a moving watermark and high-confidence short noise on archived frames. For repeated generic download failures, see [open diagnostic cases](unresolved.md): status loss was reproduced offline, but the historical cause is unknown.
+
 [Separating API readiness, guest capacity and video access](patterns/provider-readiness.md) applies when health checks pass but real Douyin resolution fails. A live signature refusal was traced to an incomplete guest identity. A complete guest then obtained the same post. Both save-enabled and playback-only delivery were verified. Error transport and capacity boundaries are regression-tested offline.
 
 [Media CDN redirects](patterns/media-cdn-redirect.md) applies when a verified platform download is rejected during transfer. The precise redirect shape was exercised twice on one live post and tested against unrelated origins.
