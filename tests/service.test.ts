@@ -46,10 +46,26 @@ it("distinguishes measured cache usage from concurrent reservations at the quota
   expect(() => store.create()).toThrowError(
     expect.objectContaining({
       code: "DISK_LIMIT",
+      message: expect.stringContaining("为 2 个任务作最坏情况预留"),
       details: { usedBytes: 4, requiredBytes: 2 * reserve, limitBytes: limit },
     }),
   );
   writeFileSync(file, "123");
+  expect(store.create().status).toBe("PENDING");
+  expect(() => store.ensureSpace(limit)).toThrowError(
+    expect.objectContaining({
+      code: "DISK_LIMIT",
+      message: expect.not.stringContaining("最坏情况"),
+    }),
+  );
+  expect(() => store.create()).toThrowError(
+    expect.objectContaining({
+      code: "BUSY",
+      details: { activeTasks: 2, concurrency: 2 },
+      message: expect.stringContaining("当前 2/2"),
+    }),
+  );
+  store.stage(first.taskId, "CANCELLED");
   expect(store.create().status).toBe("PENDING");
 });
 it("distinguishes waiting, failed, and cancelled evidence reads without changing the public code", () => {

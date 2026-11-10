@@ -60,11 +60,73 @@ export const configSchema = z.strictObject({
     .default("chi_sim+eng"),
 });
 export type Config = z.infer<typeof configSchema>;
+function readConfigFile(path: string): Record<string, unknown> {
+  const source = `配置文件 ${JSON.stringify(path)}`;
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    const reason =
+      code === "ENOENT"
+        ? "不存在，请检查 MEDIA_LENS_CONFIG"
+        : code === "EISDIR"
+          ? "是目录，请指定 JSON 文件"
+          : "无法读取，请检查路径和读取权限";
+    throw new LensError("CONFIG", source + " " + reason);
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    // Parser errors may quote credentials or prompt text from the file.
+    throw new LensError("CONFIG", source + " 不是合法 JSON");
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new LensError("CONFIG", source + " 顶层必须是 JSON 对象");
+  return value as Record<string, unknown>;
+}
+function configIssue(issue: z.core.$ZodIssue, value: unknown): string {
+  if (issue.code === "unrecognized_keys") {
+    const key = issue.keys[0];
+    return /^[a-zA-Z_][\w.-]{0,63}$/.test(key)
+      ? `未知配置项 ${key}`
+      : "含有未知配置项，请核对配置表中的键名";
+  }
+  const field = String(issue.path[0]);
+  if (issue.code === "custom" && issue.params?.asrLengthLimit === true)
+    return issue.message;
+  const current =
+    typeof value === "number" && Number.isFinite(value)
+      ? `（当前 ${value}）`
+      : "";
+  if (issue.code === "too_big" || issue.code === "too_small") {
+    const bound =
+      issue.code === "too_big"
+        ? (issue.inclusive ? "最多 " : "必须小于 ") + String(issue.maximum)
+        : (issue.inclusive ? "至少 " : "必须大于 ") + String(issue.minimum);
+    return (
+      field + (issue.origin === "string" ? " 长度" : " ") + bound + current
+    );
+  }
+  if (issue.code === "invalid_type")
+    return `${field} 类型不正确，要求 ${issue.expected}`;
+  if (issue.code === "invalid_value")
+    return `${field} 可选值：${issue.values.join("、")}`;
+  return `${field} 格式不正确`;
+}
 export function config(): Config {
-  const data = process.env.MEDIA_LENS_CONFIG
-    ? JSON.parse(readFileSync(process.env.MEDIA_LENS_CONFIG, "utf8"))
-    : {};
-  const c = configSchema.parse({
+  const file = process.env.MEDIA_LENS_CONFIG;
+  const data = file ? readConfigFile(file) : {};
+  const source = (field: unknown) =>
+    field === "endpoint" && process.env.EVIL0CTAL_ENDPOINT
+      ? "环境变量 EVIL0CTAL_ENDPOINT"
+      : field === "cacheDir" && process.env.MEDIA_LENS_CACHE
+        ? "环境变量 MEDIA_LENS_CACHE"
+        : file
+          ? `配置文件 ${JSON.stringify(file)}`
+          : "本机配置";
+  const input: Record<string, unknown> = {
     ...data,
     ...(process.env.MEDIA_LENS_CACHE
       ? { cacheDir: process.env.MEDIA_LENS_CACHE }
@@ -72,7 +134,17 @@ export function config(): Config {
     ...(process.env.EVIL0CTAL_ENDPOINT
       ? { endpoint: process.env.EVIL0CTAL_ENDPOINT }
       : {}),
-  });
+  };
+  const parsed = configSchema.safeParse(input);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue.path[0];
+    throw new LensError(
+      "CONFIG",
+      source(field) + "：" + configIssue(issue, input[String(field)]),
+    );
+  }
+  const c = parsed.data;
   const u = new URL(c.endpoint);
   if (
     u.username ||
@@ -86,7 +158,11 @@ export function config(): Config {
         ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname))
     )
   )
-    throw new LensError("CONFIG", "Provider 需要 HTTPS 或本机回环地址");
+    throw new LensError(
+      "CONFIG",
+      source("endpoint") +
+        "：endpoint 需要 HTTPS 或本机回环地址，且不能含凭据、查询参数或非根路径",
+    );
   c.cacheDir = resolve(c.cacheDir);
   return c;
 }

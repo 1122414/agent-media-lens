@@ -157,7 +157,7 @@ export class Store {
       return { removed };
     });
   }
-  ensureSpace(additionalBytes: number) {
+  ensureSpace(additionalBytes: number, reservingTasks?: number) {
     let used = 0;
     for (const row of this.db.prepare("SELECT id FROM tasks").all()) {
       const dir = this.dir(String(row.id));
@@ -167,7 +167,10 @@ export class Store {
     if (used + additionalBytes > this.settings.maxDiskBytes)
       throw new LensError(
         "DISK_LIMIT",
-        `缓存已用 ${used} 字节，本次需预留 ${additionalBytes} 字节，超出缓存上限 maxDiskBytes=${this.settings.maxDiskBytes} 字节`,
+        `缓存已用 ${used} 字节，本次需预留 ${additionalBytes} 字节，超出缓存上限 maxDiskBytes=${this.settings.maxDiskBytes} 字节` +
+          (reservingTasks === undefined
+            ? ""
+            : `；按配置上限为 ${reservingTasks} 个任务作最坏情况预留，不是实测媒体大小。可提高 maxDiskBytes 或降低配置中的 maxBytes、maxFrames、maxSeconds`),
         {
           usedBytes: used,
           requiredBytes: additionalBytes,
@@ -183,13 +186,20 @@ export class Store {
           ?.n,
       );
       if (active >= this.settings.concurrency)
-        throw new LensError("BUSY", "并发任务已满");
+        throw new LensError(
+          "BUSY",
+          `并发任务已满：当前 ${active}/${this.settings.concurrency}。请等待任务结束，或调整配置 concurrency`,
+          {
+            activeTasks: active,
+            concurrency: this.settings.concurrency,
+          },
+        );
       const reserve =
         this.settings.maxBytes +
         this.settings.maxFrames * 512000 +
         this.settings.maxSeconds * 32000 +
         8000000;
-      this.ensureSpace(reserve * (active + 1));
+      this.ensureSpace(reserve * (active + 1), active + 1);
       const id = randomUUID(),
         createdAt = new Date().toISOString();
       const task: Task = {

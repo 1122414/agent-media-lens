@@ -2,6 +2,7 @@ import { z } from "zod";
 type SizeMeasurement =
   { declaredBytes: number | string } | { receivedBytes: number };
 type ErrorDetails =
+  | { activeTasks: number; concurrency: number }
   | { limitBytes: number; usedBytes: number; requiredBytes: number }
   | ({ limitBytes: number; remainingBytes: number } & Partial<SizeMeasurement>)
   | { taskStatus: Stage; causeCode?: string };
