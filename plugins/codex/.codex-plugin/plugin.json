@@ -1,7 +1,7 @@
 {
   "name": "agent-media-lens",
   "version": "0.5.0",
-  "description": "Read video frames, speech and album pages from Douyin and Bilibili; try public Xiaohongshu notes without signing in.",
+  "description": "Read video frames, speech and album pages from Douyin and Bilibili; Xiaohongshu is experimental and guest-only.",
   "author": {
     "name": "AgentMediaLens contributors"
   },

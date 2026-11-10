@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.5.0 · 2026-11-10
+
+- Initialize the CLI, stdio MCP runtime and local Codex marketplace from one Docker command. Check media dependencies without a provider, and repair the runtime and missing launchers.
+- Read actual frame IDs and timestamps, distinguish terminal failures from work in progress, and report actionable config, HTTP, capacity and concurrency errors.
+- Inspect filtered OCR beside original observations; use optional per-window vocabulary, strict offline model selection and timestamped speech reports.
+- Watch the [80-second recorded workflow](docs/demo/README.md). This is a local Codex marketplace integration; official-directory inclusion is not verified.
 
 - Try individual Xiaohongshu note shares without a browser or an account. Scoped guest resolution, login/verification errors, ordered stills and public MP4 processing; live positive media acceptance pending.
 

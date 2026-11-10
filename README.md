@@ -1,22 +1,14 @@
 # AgentMediaLens
 
-**Multimodal Media Understanding Infrastructure for AI Agents.** Give Agents the Ability to Understand Media.
+Give Codex a Douyin or Bilibili link. It can read the actual speech and frames, then write a Markdown report with timestamps you can check.
 
-[简体中文](README.zh-CN.md) · [v0.1.0 report](docs/releases/v0.1.0.md) · [Architecture](docs/architecture/overview.md)
+[Install](#install-on-macos-or-linux) · [v0.5.0 release](https://github.com/1122414/agent-media-lens/releases/tag/v0.5.0) · [简体中文](README.zh-CN.md) · [Architecture](docs/architecture/overview.md)
 
-AgentMediaLens prepares local evidence from public Douyin videos, photo notes, Live Photos and Bilibili videos. Videos have timestamped speech and keyframes. Albums have page-indexed images, motion samples and OCR. Codex can request individual JPEGs and write its interpretation to Markdown. The installed Codex plugin analyzed a real 28-second public video, read its images and wrote a time-cited report. Live cases also cover English speech, a Mandarin software tutorial and footage without speech.
+![80-second edited replay of a real Codex session: link → transcript → JPEG → cited report → Bilibili creator comparison](docs/demo/walkthrough.gif)
 
-**Experimental Xiaohongshu guest adapter:** paste the original note share. It can use a guest page’s published MP4 or still images; it stops on login gates, challenges and previews. Live gate handling and offline media processing are verified; a successful live note is still needed. [Usage and limits](docs/providers/xiaohongshu.md).
+[Download the 80-second MP4](https://github.com/1122414/agent-media-lens/releases/download/v0.5.0/walkthrough.mp4) · [Read the demo and evidence](docs/demo/README.md)
 
-```mermaid
-flowchart LR
- Link --> Resolver --> Provider --> Download --> FFmpeg
- FFmpeg --> ASR --> Evidence
- FFmpeg --> Frames --> OCR --> Evidence
- Evidence --> SQLite
- Evidence --> MCP --> Agent
- Agent --> Markdown
-```
+**Before installing:** the Docker runtime needs no host media tools. New Douyin/Bilibili analyses need a separately configured guest reader. The Codex plugin installs from this repository's **local marketplace**; an OpenAI official-directory listing has not been verified. **Xiaohongshu — Experimental:** guest-only, stops at login, positive live frame acceptance still pending. [Scope](docs/providers/xiaohongshu.md).
 
 ## Analyze a work or make an original
 
@@ -91,7 +83,7 @@ When a user has rights to keep a video file, run `media-lens analyze "$SHARE_URL
 
 ## Codex and other MCP clients
 
-From the checkout, install the launchers, ensure the desktop app can find media-lens-mcp on PATH, and run:
+The installer registers the plugin if Codex CLI is available. For manual registration from the checkout:
 
 ```sh
 codex plugin marketplace add .

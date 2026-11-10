@@ -13,6 +13,7 @@ __pycache__/
 .DS_Store
 *.sqlite*
 *.mp4
+!docs/demo/walkthrough.mp4
 *.wav
 *.bin
 *.log

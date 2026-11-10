@@ -1,0 +1,46 @@
+{
+  "capture": "Codex CLI / completed MCP events; waits edited, private fields omitted",
+  "platform": "douyin",
+  "source": "https://www.douyin.com/video/7705364444327233914",
+  "status": "COMPLETED",
+  "stages": [
+    "PENDING",
+    "RESOLVING",
+    "DOWNLOADING",
+    "EXTRACTING_AUDIO",
+    "TRANSCRIBING",
+    "EXTRACTING_FRAMES",
+    "OCR",
+    "COMPLETED"
+  ],
+  "asrSegments": 4,
+  "model": "base",
+  "firstSegment": {
+    "start": 0,
+    "end": 3.16,
+    "text": "可那些没有天赋的人呢"
+  },
+  "singleFrame": {
+    "id": "f005",
+    "timestamp": 27,
+    "mimeType": "image/jpeg",
+    "bytes": 44194,
+    "sha256": "21c2d5dc75d31b92950bcc5d752ea05a652355749565a4cd36b372bfdb2281dc"
+  },
+  "analysis": "转写在 **00:00–00:03.16** 识别出对缺乏天赋者处境的提问；后续识别出现明显错字，不能可靠还原完整内容。\n\n在 **00:27（f005）** 的画面中，黑白街景叠加红色色块、中央蓝字和两侧白色大字；顶部标注原创 demo，并征求命名与支持。",
+  "bilibili": {
+    "source": "https://www.bilibili.com/video/BV1Q34P6vEzR/",
+    "duration": 432.446667,
+    "frames": 3,
+    "segments": 294,
+    "sourceOfCounts": "separate completed analysis of same BV"
+  },
+  "comparison": {
+    "scope": "collection",
+    "observed": 6,
+    "observedAt": "2026-11-10T11:01:20.975Z",
+    "high": 319005,
+    "ordinary": 25828
+  },
+  "publicImage": "Project-authored settings card, separately decoded and retrieved via media_get_frame; not a frame of either public work."
+}

@@ -1,19 +1,14 @@
 # AgentMediaLens
 
-面向 AI Agent 的本地多媒体理解基础设施。输入抖音视频、图文、实况照片或 B 站视频链接。视频按时间读取口播与画面；图集按页读取静态图、动态采样和画面文字。已用独立 Codex 客户端分析一条 28 秒的真实作品，读到实际图片并写出带时间戳的报告。中文软件教程、英文口播和无口播素材也已在真实平台验证。详见[实施状态](IMPLEMENTATION_STATUS.md)。
+把抖音或 B 站链接发给 Codex。它可以读真实口播和画面，再把带帧号和时间戳的分析写成 Markdown，方便你核对。
 
-[English](README.md) · [v0.1.0 验收与安装报告](docs/releases/v0.1.0.md) · [架构图和模块关系](ARCHITECTURE.md) · [技术选型](TECH_STACK.md)
+[安装](#install) · [v0.5.0 发布页](https://github.com/1122414/agent-media-lens/releases/tag/v0.5.0) · [English](README.md) · [架构](ARCHITECTURE.md)
 
-**小红书（访客试验）**：把 App 复制的完整笔记分享原文发给插件即可。它只读官方公开页，不打开浏览器，也不用账号。若页面提供真实视频或逐页图片，就进入本地处理；若要求登录、验证或只返回预览，就告诉你未读到画面。已实测登录拦截，真实笔记成功取帧仍待验证。[范围和用法](docs/providers/xiaohongshu.md)
+![80 秒实跑回放：从抖音链接到口播、JPEG 和报告，再到 B 站创作者对比](docs/demo/walkthrough.gif)
 
-```mermaid
-flowchart LR
- 分享链接 --> 作品识别 --> 采集适配器 --> 下载
- 下载 --> FFmpeg --> 转写
- FFmpeg --> 选帧 --> OCR
- 转写 --> 证据
- OCR --> 证据 --> MCP --> Agent --> Markdown
-```
+[下载 80 秒 MP4](https://github.com/1122414/agent-media-lens/releases/download/v0.5.0/walkthrough.mp4) · [演示步骤及证据](docs/demo/README.md)
+
+**安装前先看：** Docker 运行时不要求宿主机装媒体工具。分析新抖音、B 站作品仍需另配访客采集服务。插件支持从本仓库的 **Codex 本地 Marketplace** 安装，尚未确认被 OpenAI 官方目录收录。**小红书 — Experimental / 实验性**：只走访客公开页，遇登录即停；真实成功取帧仍待验证。[支持范围](docs/providers/xiaohongshu.md)。
 
 ## 分析作品、比较高赞与普通作品、做自己的创作方案
 
@@ -48,6 +43,8 @@ media-lens profile "$PROFILE_URL" --local-login --view posts --count 3 --cursor 
 ```
 
 插件参数为 `auth: "local-login"`；不传时仍为访客。登录模式只用于作者投稿，不用于下载。用发布时间区分新作品与置顶作品，空标题表示平台没有提供标题。
+
+<a id="install"></a>
 
 ## 安装：macOS / Linux
 
