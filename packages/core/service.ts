@@ -53,6 +53,15 @@ export interface Result extends Evidence {
   retained?: boolean;
   artifacts: Record<string, string>;
 }
+function displaySpeech(text: string, language: string | null) {
+  return language === "zh"
+    ? text.replace(
+        /https?:\/\/\S+|`[^`]*`|(?<=\p{Script=Han})[,?](?=\s*(?:\p{Script=Han}|$))/gu,
+        (token) => (token === "," ? "，" : token === "?" ? "？" : token),
+      )
+    : text;
+}
+
 const services = { resolve: resolveMedia, download, worker };
 export class Lens {
   readonly store: Store;
@@ -232,7 +241,7 @@ export class Lens {
           ...(evidence.warnings ?? []).map((w) => `Warning: ${w}`),
           ...evidence.transcript.segments.map(
             (s) =>
-              `- [${s.start.toFixed(1)}–${s.end.toFixed(1)}s] ${JSON.stringify(s.text)}`,
+              `- [${s.start.toFixed(1)}–${s.end.toFixed(1)}s] ${JSON.stringify(displaySpeech(s.text, evidence.transcript.language))}`,
           ),
           "",
           "## Frame text",
@@ -441,13 +450,7 @@ export class Lens {
     const paragraphs: string[] = [];
     let previousEnd = -Infinity;
     for (const s of segments) {
-      const display =
-        t.language === "zh"
-          ? s.text.replace(
-              /https?:\/\/\S+|`[^`]*`|(?<=\p{Script=Han})[,?](?=\s*(?:\p{Script=Han}|$))/gu,
-              (token) => (token === "," ? "，" : token === "?" ? "？" : token),
-            )
-          : s.text;
+      const display = displaySpeech(s.text, t.language);
       if (
         s.start - previousEnd >= 1 ||
         !paragraphs.length ||

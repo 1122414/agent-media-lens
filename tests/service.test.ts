@@ -1,6 +1,7 @@
 import { afterEach, expect, it } from "vitest";
 import {
   mkdtempSync,
+  readFileSync,
   rmSync,
   utimesSync,
   existsSync,
@@ -278,26 +279,53 @@ it("formats the requested page of an older transcript without rewriting its evid
   expect(page.nextOffset).toBe(2);
 });
 
-it("renders existing Chinese punctuation only in display text, preserving quoted evidence", () => {
-  const lens = new Lens(settings());
-  stores.push(lens.store);
-  const id = lens.store.create().taskId;
-  lens.store.stage(id, "COMPLETED", { artifacts: {} });
+it("exports timestamped speech with the same display punctuation and preserves raw evidence", async () => {
   const text =
     "你好,继续吗? 温度1,500，路径 https://example.com/参数? 代码 `字段,字段` 不猜断句";
-  const segments = [{ start: 0, end: 12, text }];
-  writeFileSync(
-    lens.store.file(id, "result.json"),
-    JSON.stringify({
-      schemaVersion: "1.0",
-      artifacts: {},
-      transcript: { language: "zh", text, segments },
-    }),
-  );
-  expect(lens.transcript(id)).toMatchObject({
-    text,
+  const displayed =
+    "你好，继续吗？ 温度1,500，路径 https://example.com/参数? 代码 `字段,字段` 不猜断句";
+  const segments = [
+    { start: 0.25, end: 6.75, text },
+    { start: 8, end: 10, text: '看,他说"好"。' },
+  ];
+  const transcript = {
+    language: "zh",
+    text: segments.map((s) => s.text).join(" "),
     segments,
-    displayText:
-      "你好，继续吗？ 温度1,500，路径 https://example.com/参数? 代码 `字段,字段` 不猜断句",
+  };
+  const lens = new Lens(settings(), {
+    resolve: async () => ({
+      provider: "fixture",
+      stream: "fixture",
+      media: {
+        platform: "douyin",
+        id: "123456789",
+        sourceUrl: url,
+        title: "Fixture",
+        author: "Test",
+        duration: 10,
+      },
+    }),
+    download: async (_url, path) => {
+      writeFileSync(path, "fixture");
+    },
+    worker: async () => ({ duration: 10, transcript, frames: [], ocr: [] }),
   });
+  stores.push(lens.store);
+  const job = lens.start(url);
+  expect((await job.done).status).toBe("COMPLETED");
+  const read = (file: string) =>
+    readFileSync(lens.store.file(job.taskId, file), "utf8");
+  expect(JSON.parse(read("transcript.json"))).toEqual(transcript);
+  expect(lens.transcript(job.taskId)).toMatchObject({
+    ...transcript,
+    displayText: displayed + '\n\n看，他说"好"。',
+  });
+  const speech = read("analysis.md")
+    .split("## Speech\n")[1]
+    .split("\n\n## Frame text")[0];
+  expect(speech.split("\n")).toEqual([
+    "- [0.3–6.8s] " + JSON.stringify(displayed),
+    "- [8.0–10.0s] " + JSON.stringify('看，他说"好"。'),
+  ]);
 });
