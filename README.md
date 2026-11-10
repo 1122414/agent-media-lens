@@ -82,7 +82,7 @@ media-lens result "$TASK_ID"
 media-lens cleanup
 ```
 
-When a user has rights to keep a video file, run `media-lens analyze "$SHARE_URL" --keep-playback` or pass `keepPlayback: true` to `media_analyze`. The result identifies the actual rendition and its path under the task directory. Creator-enabled downloads are cached for seven days by default. When the save button is disabled or unknown, ordinary guest playback can still be analyzed. By default its working file is deleted after processing. Use `--discard-original` to discard either rendition. A guest stream is a platform encode; camera masters are outside this interface.
+When a user has rights to keep a video file, run `media-lens analyze "$SHARE_URL" --keep-playback` or pass `keepPlayback: true` to `media_analyze`. The result identifies the actual rendition and its path under the task directory. Creator-enabled downloads are cached for seven days by default. When the save button is disabled or unknown, ordinary guest playback can still be analyzed. By default its working file is deleted after processing. If you have the right to retain it, the same flag keeps this guest rendition even when platform saving is disabled; it does not unlock access. Use `--discard-original` to discard either rendition. A guest stream is a platform encode; camera masters are outside this interface.
 
 ## Codex and other MCP clients
 

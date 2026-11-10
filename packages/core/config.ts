@@ -24,7 +24,11 @@ function asrText(field: "asrHotwords" | "asrPrompt", max: number) {
           message: `${field} 最多 ${max} 个 ${bytes ? "UTF-8 字节" : "UTF-16 码元"}（当前 ${length}）`,
         });
     })
-    .meta({ maxLength: max });
+    .meta(
+      field === "asrHotwords"
+        ? { maxLength: max, "x-maxUtf8Bytes": max }
+        : { maxLength: max },
+    );
 }
 export const asrHotwords = asrText("asrHotwords", 128);
 export const asrPrompt = asrText("asrPrompt", 512);

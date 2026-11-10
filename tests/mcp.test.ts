@@ -8,6 +8,13 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { Lens } from "../packages/core/service.js";
 import { configSchema } from "../packages/core/config.js";
 import { projectRoot, worker } from "../packages/core/processing.js";
+it("counts trimmed hotwords in UTF-8 bytes without imposing a 42-character cap", () => {
+  const schema = configSchema.shape.asrHotwords;
+  for (const text of ["a".repeat(128), "甲".repeat(42) + ",a", "😀".repeat(32)])
+    expect(schema.parse(" " + text + " ")).toBe(text);
+  for (const text of ["a".repeat(129), "甲".repeat(43), "😀".repeat(32) + ","])
+    expect(schema.safeParse(text).success).toBe(false);
+});
 it("invokes the installed server entry point, reads JPEG content and saves cited Markdown", async () => {
   const cache = mkdtempSync(join(tmpdir(), "lens-mcp-"));
   const url = "https://www.douyin.com/video/123456789";
@@ -69,7 +76,22 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
         stderr: "ignore",
       }),
     );
-    const toolNames = (await client.listTools()).tools.map((t) => t.name);
+    const listed = (await client.listTools()).tools;
+    const toolNames = listed.map((t) => t.name);
+    expect(
+      listed.find((t) => t.name === "media_analyze")?.inputSchema.properties,
+    ).toMatchObject({
+      asrHotwords: {
+        maxLength: 128,
+        "x-maxUtf8Bytes": 128,
+        description: expect.stringContaining("128 UTF-8 bytes"),
+      },
+      keepPlayback: {
+        description: expect.stringContaining(
+          "even when platform saving is disabled",
+        ),
+      },
+    });
     expect(toolNames).toContain("media_compare_profile");
     expect(toolNames).toContain("media_save_study");
     expect(toolNames).toContain("media_list_profile");
@@ -245,8 +267,8 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       [
         "asrHotwords",
         "--asr-hotwords",
-        "密".repeat(63),
-        "asrHotwords 最多 128 个 UTF-8 字节（当前 189）",
+        "甲".repeat(100),
+        "asrHotwords 最多 128 个 UTF-8 字节（当前 300）",
       ],
       [
         "asrPrompt",

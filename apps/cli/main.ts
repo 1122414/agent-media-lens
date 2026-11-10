@@ -167,7 +167,10 @@ cli
     "抖音详情与视频使用 evil0ctal；native 可识别抖音链接",
   )
   .option("--discard-original", "处理后立即删除原片")
-  .option("--keep-playback", "有权保存时，保留访客可观看的播放版本")
+  .option(
+    "--keep-playback",
+    "即使平台关闭保存，也保留访客可正常观看的播放副本；仅在你有权留存时使用",
+  )
   .option("--model <name>")
   .option(
     "--strict-model",

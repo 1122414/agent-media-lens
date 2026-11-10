@@ -156,17 +156,17 @@ server.registerTool(
         .boolean()
         .optional()
         .describe(
-          "Retain the normal guest playback rendition when the user has rights to save it.",
+          "Keep a normally accessible guest playback copy even when platform saving is disabled. Use only if entitled to retain it; this does not unlock media.",
         ),
       asrHotwords: asrHotwords
         .optional()
         .describe(
-          "Known terms for every decoding window (128 UTF-8 bytes); includes word-aligned phrase times. Hints are not evidence.",
+          "Known terms for every decoding window; enables word-aligned phrase times. After trimming, the limit is 128 UTF-8 bytes (128 ASCII characters or 42 typical three-byte Chinese characters; separators count). JSON Schema maxLength counts characters only. Hints are not evidence.",
         ),
       asrPrompt: asrPrompt
         .optional()
         .describe(
-          "Optional initial context or writing style for transcription; never treat the prompt as observed speech.",
+          "Optional initial context or writing style; up to 512 UTF-16 code units after trimming. Never treat the prompt as observed speech.",
         ),
       asrFallback: z
         .boolean()
