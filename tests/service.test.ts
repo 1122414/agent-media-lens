@@ -277,3 +277,27 @@ it("formats the requested page of an older transcript without rewriting its evid
   expect(page.displayText).toBe("two");
   expect(page.nextOffset).toBe(2);
 });
+
+it("renders existing Chinese punctuation only in display text, preserving quoted evidence", () => {
+  const lens = new Lens(settings());
+  stores.push(lens.store);
+  const id = lens.store.create().taskId;
+  lens.store.stage(id, "COMPLETED", { artifacts: {} });
+  const text =
+    "你好,继续吗? 温度1,500，路径 https://example.com/参数? 代码 `字段,字段` 不猜断句";
+  const segments = [{ start: 0, end: 12, text }];
+  writeFileSync(
+    lens.store.file(id, "result.json"),
+    JSON.stringify({
+      schemaVersion: "1.0",
+      artifacts: {},
+      transcript: { language: "zh", text, segments },
+    }),
+  );
+  expect(lens.transcript(id)).toMatchObject({
+    text,
+    segments,
+    displayText:
+      "你好，继续吗？ 温度1,500，路径 https://example.com/参数? 代码 `字段,字段` 不猜断句",
+  });
+});

@@ -440,13 +440,20 @@ export class Lens {
     const paragraphs: string[] = [];
     let previousEnd = -Infinity;
     for (const s of segments) {
+      const display =
+        t.language === "zh"
+          ? s.text.replace(
+              /https?:\/\/\S+|`[^`]*`|(?<=\p{Script=Han})[,?](?=\s*(?:\p{Script=Han}|$))/gu,
+              (token) => (token === "," ? "，" : token === "?" ? "？" : token),
+            )
+          : s.text;
       if (
         s.start - previousEnd >= 1 ||
         !paragraphs.length ||
         paragraphs[paragraphs.length - 1].length >= 120
       )
-        paragraphs.push(s.text);
-      else paragraphs[paragraphs.length - 1] += " " + s.text;
+        paragraphs.push(display);
+      else paragraphs[paragraphs.length - 1] += " " + display;
       previousEnd = s.end;
     }
     return {

@@ -152,6 +152,7 @@ cli
 cli.command("identify <url>").action(async (url) => show(await identify(url)));
 cli
   .command("resolve <url>")
+  .description("读取平台元数据；实际文件时长与留存状态请在 analyze 完成后查看")
   .option(
     "--provider <name>",
     "抖音详情与视频使用 evil0ctal；native 可识别抖音链接",
