@@ -5,7 +5,9 @@ import { open, unlink } from "node:fs/promises";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import ipaddr from "ipaddr.js";
-import { LensError } from "./contracts.js";
+import { setTimeout as sleep } from "node:timers/promises";
+import { trace } from "./diagnostics.js";
+import { LensError, PublicHttpError } from "./contracts.js";
 const pages = [
   "www.douyin.com",
   "douyin.com",
@@ -182,7 +184,77 @@ export function checkXhsGate(url: URL, status?: number) {
       "这条小红书分享当前不可读；无法据此确认笔记已删除",
     );
 }
-export async function fetchPublic(
+function retryAfter(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const raw = value.trim();
+  if (/^\d+$/.test(raw)) return Math.min(Number(raw), Number.MAX_SAFE_INTEGER);
+  // Do not let Date.parse reinterpret a signed number as a calendar date.
+  if (!/[a-z]/i.test(raw)) return undefined;
+  const time = Date.parse(raw);
+  return Number.isFinite(time)
+    ? Math.max(0, Math.ceil((time - Date.now()) / 1000))
+    : undefined;
+}
+
+export async function retryPublicRead<T>(
+  run: () => Promise<T>,
+  signal: AbortSignal,
+  onRetry?: () => void,
+  retryTransport = false,
+): Promise<T> {
+  for (let retries = 0; ; retries++) {
+    signal.throwIfAborted();
+    try {
+      return await run();
+    } catch (err) {
+      const http = err instanceof PublicHttpError ? err : undefined;
+      const code = (err as NodeJS.ErrnoException)?.code ?? "";
+      const transient = http
+        ? http.code === "HTTP_RATE_LIMITED" ||
+          (http.code === "HTTP_SERVER_ERROR" &&
+            [500, 502, 503, 504].includes(http.httpStatus))
+        : retryTransport &&
+          ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"].includes(code);
+      if (!transient || retries >= (http ? 2 : 1) || signal.aborted) throw err;
+      const delayMs = Math.max(
+        2000 * 2 ** retries,
+        (http?.retryAfterSeconds ?? 0) * 1000,
+      );
+      // Never shorten a server-requested delay to fit our local wait budget.
+      if (delayMs > 8000) throw err;
+      trace({
+        event: "retry",
+        code,
+        hostname: http?.hostname,
+        httpStatus: http?.httpStatus,
+        attempt: retries + 2,
+        delayMs,
+      });
+      try {
+        await sleep(delayMs, undefined, { signal });
+      } catch {
+        if (http && signal.reason?.name === "TimeoutError") throw http;
+        throw signal.reason;
+      }
+      signal.throwIfAborted();
+      onRetry?.();
+    }
+  }
+}
+
+export function fetchPublic(
+  input: string,
+  kind: UrlKind,
+  signal: AbortSignal,
+  onRetry?: () => void,
+) {
+  return retryPublicRead(
+    () => requestPublicOnce(input, kind, signal),
+    signal,
+    onRetry,
+  );
+}
+async function requestPublicOnce(
   input: string,
   kind: UrlKind,
   signal: AbortSignal,
@@ -191,6 +263,8 @@ export async function fetchPublic(
   const xhs = kind === "xhs-page" || kind === "xhs-identify";
   let expectedNote = xhs ? xhsPath.exec(url.pathname)?.[1] : undefined;
   for (let hop = 0; hop <= 4; hop++) {
+    signal.throwIfAborted();
+    const started = performance.now();
     const ips = await lookup(url.hostname, { all: true, family: 4 });
     if (
       !ips.length ||
@@ -219,6 +293,13 @@ export async function fetchPublic(
         req.once("error", fail);
       },
     );
+    trace({
+      event: "http",
+      hostname: url.hostname,
+      status: res.statusCode ?? 0,
+      hop,
+      elapsedMs: Math.round(performance.now() - started),
+    });
     if (
       [301, 302, 303, 307, 308].includes(res.statusCode ?? 0) &&
       res.headers.location
@@ -228,7 +309,14 @@ export async function fetchPublic(
       // Some official short links advertise an HTTP location. Never request it in plaintext.
       if (xhs && next.protocol === "http:" && !next.port)
         next.protocol = "https:";
+      const previous = url.hostname;
       url = checked(next.href, kind, url);
+      trace({
+        event: "redirect",
+        fromHost: previous,
+        toHost: url.hostname,
+        hop: hop + 1,
+      });
       if (xhs) {
         checkXhsGate(url);
         const note = xhsPath.exec(url.pathname)?.[1];
@@ -261,9 +349,41 @@ export async function fetchPublic(
     }
     if (res.statusCode !== 200) {
       res.destroy();
-      if (xhs || kind === "xhs-photo" || kind === "xhs-stream")
-        checkXhsGate(url, res.statusCode);
-      throw new LensError("UNAVAILABLE", "公开资源不可访问");
+      const status = res.statusCode ?? 0;
+      const after = retryAfter(res.headers["retry-after"]);
+      if (xhs || kind === "xhs-photo" || kind === "xhs-stream") {
+        try {
+          checkXhsGate(url, status);
+        } catch (gate) {
+          if (gate instanceof LensError)
+            throw new PublicHttpError(
+              gate.code,
+              gate.message,
+              status,
+              url.hostname,
+              after,
+            );
+          throw gate;
+        }
+        throw new PublicHttpError(
+          "UNAVAILABLE",
+          "访客请求失败；已停止",
+          status,
+          url.hostname,
+          after,
+        );
+      }
+      const [code, message] =
+        status === 429
+          ? ["HTTP_RATE_LIMITED", "请求受限，请稍后再试"]
+          : status === 403 || status === 401
+            ? ["HTTP_ACCESS_DENIED", "资源拒绝访问；已停止"]
+            : status === 404 || status === 410
+              ? ["HTTP_NOT_FOUND", "资源不存在或已失效"]
+              : status >= 500 && status < 600
+                ? ["HTTP_SERVER_ERROR", "上游服务异常，请稍后再试"]
+                : ["UNAVAILABLE", "公开资源不可访问"];
+      throw new PublicHttpError(code, message, status, url.hostname, after);
     }
     return { res, url };
   }
@@ -276,7 +396,8 @@ export async function download(
   signal?: AbortSignal,
   kind: AssetKind = "stream",
 ) {
-  const { res } = await fetchPublic(
+  // Lens.transfer retries the entire body transfer, after partial-file cleanup.
+  const { res } = await requestPublicOnce(
     stream,
     kind,
     AbortSignal.any([AbortSignal.timeout(120000), ...(signal ? [signal] : [])]),

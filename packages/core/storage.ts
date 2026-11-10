@@ -1,3 +1,4 @@
+import { trace } from "./diagnostics.js";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import {
@@ -220,6 +221,14 @@ export class Store {
     this.db
       .prepare("UPDATE tasks SET body=?,active=? WHERE id=?")
       .run(JSON.stringify(task), done ? 0 : 1, id);
+    trace({
+      event: "stage",
+      taskId: id,
+      stage: status,
+      previousStage: last.stage,
+      elapsedMs: last.elapsedMs,
+      code: extra.error?.code,
+    });
     return task;
   }
 }

@@ -1,3 +1,4 @@
+import { trace } from "./diagnostics.js";
 import { z } from "zod";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -446,16 +447,18 @@ export function evil(c: Config, request = fetch): Provider {
     },
   };
 }
-export async function identify(input: string) {
+export async function identify(
+  input: string,
+  signal?: AbortSignal,
+  onRetry?: () => void,
+) {
   let url = new URL(share(input));
   if (xhsPage(url.hostname)) return identifyXhs(url.href);
+  const pageSignal = () =>
+    AbortSignal.any([AbortSignal.timeout(12000), ...(signal ? [signal] : [])]);
   if (url.hostname === "b23.tv") {
     const requested = url.searchParams.get("p");
-    const r = await fetchPublic(
-      url.href,
-      "bili-page",
-      AbortSignal.timeout(12000),
-    );
+    const r = await fetchPublic(url.href, "bili-page", pageSignal(), onRetry);
     r.res.destroy();
     url = new URL(share(r.url.href));
     if (requested) url.searchParams.set("p", requested);
@@ -466,7 +469,7 @@ export async function identify(input: string) {
     return { id, kind: "video", url: url.href, platform: "bilibili" as const };
   }
   if (url.hostname === "v.douyin.com") {
-    const r = await fetchPublic(url.href, "page", AbortSignal.timeout(12000));
+    const r = await fetchPublic(url.href, "page", pageSignal(), onRetry);
     r.res.destroy();
     url = r.url;
   }
@@ -500,11 +503,24 @@ export async function resolveMedia(
   c: Config,
   input: string,
   provider = c.provider,
+  signal?: AbortSignal,
+  onRetry?: () => void,
 ) {
   const source = share(input);
-  if (xhsPage(new URL(source).hostname))
+  const hostname = new URL(source).hostname;
+  if (xhsPage(hostname)) {
+    trace({ event: "provider", provider: "native", platform: "xiaohongshu" });
     return { ...(await native.resolve(source)), provider: native.name };
-  const link = await identify(source);
+  }
+  trace({
+    event: "provider",
+    provider,
+    platform:
+      hostname === "b23.tv" || hostname === "www.bilibili.com"
+        ? "bilibili"
+        : "douyin",
+  });
+  const link = await identify(source, signal, onRetry);
   const selected = provider === "evil0ctal" ? evil(c) : native;
   try {
     const found = await selected.resolve(link.url);
@@ -520,8 +536,10 @@ export async function resolveMedia(
       c.fallback &&
       e instanceof LensError &&
       e.code === "PROVIDER_CONNECTION"
-    )
+    ) {
+      trace({ event: "provider", provider: "native", platform: link.platform });
       return { ...(await native.resolve(input)), provider: native.name };
+    }
     throw e;
   }
 }

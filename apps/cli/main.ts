@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { diagnostics } from "../../packages/core/diagnostics.js";
 import { Command } from "commander";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -211,8 +212,10 @@ cli
 cli.command("result <id>").action((id) => show(service().result(id)));
 cli.command("cleanup").action(() => show(service().store.cleanup()));
 cli.hook("preAction", (_p, action) => {
-  if (cli.opts().verbose)
+  if (cli.opts().verbose) {
+    diagnostics.subscribe((event) => console.error(JSON.stringify(event)));
     console.error(JSON.stringify({ event: "cli", command: action.name() }));
+  }
 });
 try {
   await cli.parseAsync();

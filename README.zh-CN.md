@@ -101,6 +101,8 @@ docker compose -f compose.yaml -f compose.local-provider.yaml run --rm -T lens d
 
 ## 配置与常见问题
 
+- 排查下载失败时运行 `media-lens --verbose analyze "$SHARE_URL"`。stderr 分别显示所选服务、跳转主机、HTTP 状态、重试等待和阶段耗时。明确拒绝不重试；若服务器要求等待超过 8 秒，任务返回建议等待时间，由调用方稍后重试。
+
 - 用 MEDIA_LENS_CONFIG 指定 JSON 文件，用 MEDIA_LENS_CACHE 覆盖缓存目录，运行 media-lens config 查看生效配置。默认并发 1、时长 600 秒、单文件 500 MB、缓存预算 10 GB、原片保留 7 天。启动新任务或运行 cleanup 时清除过期原片。
 - 单次分析可加 --discard-original，处理结束即清理原片；MCP 对应字段为 discardOriginal。
 - 初始抽帧间隔 4 秒，上限 30 帧；普通 CPU 默认 base/int8。可设置 interval、maxFrames、model、device 和 ocrLang。字段与默认值见[英文配置表](README.md)。

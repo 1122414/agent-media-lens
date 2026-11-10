@@ -14,7 +14,8 @@ import {
   type Media,
   type Evidence,
 } from "./contracts.js";
-import { share, download, type AssetKind } from "./network.js";
+import { trace } from "./diagnostics.js";
+import { share, download, retryPublicRead, type AssetKind } from "./network.js";
 import { resolveMedia } from "./providers.js";
 import { worker } from "./processing.js";
 import { Store } from "./storage.js";
@@ -91,9 +92,16 @@ export class Lens {
           c,
           source,
           c.provider,
+          controller.signal,
+          () => this.markRetry(id),
         );
         controller.signal.throwIfAborted();
         album = Boolean(slides);
+        trace({
+          event: "rendition",
+          platform: media.platform,
+          kind: album ? "image_album" : (media.rendition ?? "unspecified"),
+        });
         if (media.duration !== null && media.duration > c.maxSeconds)
           throw durationLimit(media.duration, c.maxSeconds);
         temporaryPlayback =
@@ -283,22 +291,16 @@ export class Lens {
     kind: AssetKind = "stream",
   ) {
     if (max <= 0) throw new LensError("SIZE_LIMIT", "作品超出大小限制");
-    const run = () => this.io.download(url, path, max, signal, kind);
-    try {
-      await run();
-    } catch (err) {
-      if (
-        signal.aborted ||
-        !["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"].includes(
-          (err as NodeJS.ErrnoException).code || "",
-        )
-      )
-        throw err;
-      this.store.stage(id, "DOWNLOADING", {
-        retries: this.store.task(id).retries + 1,
-      });
-      await run();
-    }
+    return retryPublicRead(
+      () => this.io.download(url, path, max, signal, kind),
+      signal,
+      () => this.markRetry(id),
+      true,
+    );
+  }
+  private markRetry(id: string) {
+    const task = this.store.task(id);
+    this.store.stage(id, task.status, { retries: task.retries + 1 });
   }
   cancelAll() {
     for (const c of this.active.values()) c.abort();

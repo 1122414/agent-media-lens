@@ -7,6 +7,20 @@ export class LensError extends Error {
     super(message);
   }
 }
+export class PublicHttpError extends LensError {
+  constructor(
+    code: string,
+    message: string,
+    readonly httpStatus: number,
+    readonly hostname: string,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(
+      code,
+      `${hostname} HTTP ${httpStatus}：${message}${retryAfterSeconds === undefined ? "" : `（Retry-After: ${retryAfterSeconds}s）`}`,
+    );
+  }
+}
 export function durationLimit(seconds: number, limit: number) {
   return new LensError(
     "DURATION_LIMIT",
@@ -14,6 +28,14 @@ export function durationLimit(seconds: number, limit: number) {
   );
 }
 export function failure(err: unknown) {
+  if (err instanceof PublicHttpError)
+    return {
+      code: err.code,
+      message: err.message,
+      httpStatus: err.httpStatus,
+      hostname: err.hostname,
+      retryAfterSeconds: err.retryAfterSeconds,
+    };
   if (err instanceof LensError) return { code: err.code, message: err.message };
   if (err instanceof z.ZodError)
     return {
