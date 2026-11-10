@@ -1,11 +1,34 @@
 import { z } from "zod";
+type SizeMeasurement =
+  { declaredBytes: number | string } | { receivedBytes: number };
+type ErrorDetails =
+  | { limitBytes: number; usedBytes: number; requiredBytes: number }
+  | ({ limitBytes: number; remainingBytes: number } & Partial<SizeMeasurement>)
+  | { taskStatus: Stage; causeCode?: string };
 export class LensError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    readonly details?: ErrorDetails,
   ) {
     super(message);
   }
+}
+export function mediaSizeLimit(
+  limitBytes: number,
+  remainingBytes: number,
+  measured?: SizeMeasurement,
+) {
+  const reason = !measured
+    ? "作品下载额度已用尽"
+    : "declaredBytes" in measured
+      ? `响应声明 ${measured.declaredBytes} 字节`
+      : `已收到至少 ${measured.receivedBytes} 字节`;
+  return new LensError(
+    "SIZE_LIMIT",
+    `${reason}；本次下载剩余额度 ${remainingBytes} 字节，作品上限 maxBytes=${limitBytes} 字节`,
+    { limitBytes, remainingBytes, ...measured },
+  );
 }
 export class PublicHttpError extends LensError {
   constructor(
@@ -36,7 +59,8 @@ export function failure(err: unknown) {
       hostname: err.hostname,
       retryAfterSeconds: err.retryAfterSeconds,
     };
-  if (err instanceof LensError) return { code: err.code, message: err.message };
+  if (err instanceof LensError)
+    return { code: err.code, message: err.message, ...err.details };
   if (err instanceof z.ZodError) {
     // Only our local ASR limit checks produce a safe length-only message.
     const limit = err.issues.find(

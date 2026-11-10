@@ -28,6 +28,72 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 const url = "https://www.douyin.com/video/123456789";
+it("distinguishes measured cache usage from concurrent reservations at the quota boundary", () => {
+  const config = {
+    ...settings(),
+    concurrency: 2,
+    maxBytes: 1024,
+    maxSeconds: 1,
+    maxFrames: 1,
+  };
+  const reserve = 1024 + 32000 + 512000 + 8000000;
+  const limit = 2 * reserve + 3;
+  const store = new Store({ ...config, maxDiskBytes: limit });
+  stores.push(store);
+  const first = store.create();
+  const file = store.file(first.taskId, "analysis.md");
+  writeFileSync(file, "1234");
+  expect(() => store.create()).toThrowError(
+    expect.objectContaining({
+      code: "DISK_LIMIT",
+      details: { usedBytes: 4, requiredBytes: 2 * reserve, limitBytes: limit },
+    }),
+  );
+  writeFileSync(file, "123");
+  expect(store.create().status).toBe("PENDING");
+});
+it("distinguishes waiting, failed, and cancelled evidence reads without changing the public code", () => {
+  const lens = new Lens(settings());
+  stores.push(lens.store);
+  const id = lens.store.create().taskId;
+  for (const status of ["PENDING", "DOWNLOADING", "FAILED"] as const) {
+    if (status !== "PENDING")
+      lens.store.stage(
+        id,
+        status,
+        status === "FAILED"
+          ? { error: { code: "SIZE_LIMIT", message: "视频超出大小限制" } }
+          : {},
+      );
+    for (const read of [
+      () => lens.result(id),
+      () => lens.frames(id),
+      () => lens.transcript(id),
+    ]) {
+      expect(read).toThrowError(
+        expect.objectContaining({
+          code: "NOT_READY",
+          details: {
+            taskStatus: status,
+            ...(status === "FAILED" ? { causeCode: "SIZE_LIMIT" } : {}),
+          },
+          message: expect.stringContaining(
+            status === "FAILED" ? "SIZE_LIMIT — 视频超出大小限制" : status,
+          ),
+        }),
+      );
+    }
+  }
+  const cancelled = lens.store.create().taskId;
+  lens.store.stage(cancelled, "CANCELLED");
+  expect(() => lens.result(cancelled)).toThrowError(
+    expect.objectContaining({
+      code: "NOT_READY",
+      details: { taskStatus: "CANCELLED" },
+      message: expect.stringContaining("已取消"),
+    }),
+  );
+});
 it("processes a real silent clip, reads evidence, guards active files and expires originals", async () => {
   const c = settings();
   let attempts = 0;

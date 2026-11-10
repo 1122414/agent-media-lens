@@ -29,8 +29,20 @@ it("bounds chunked and declared HTTP bodies, cleans partials, and preserves exis
   try {
     for (const route of ["/declared", "/chunked"]) {
       await expect(
-        saveDownload(await response(route), path, 3),
-      ).rejects.toMatchObject({ code: "SIZE_LIMIT" });
+        saveDownload(await response(route), path, 3, 10),
+      ).rejects.toMatchObject({
+        code: "SIZE_LIMIT",
+        message: expect.stringContaining(
+          route === "/declared" ? "响应声明 6 字节" : "已收到至少 6 字节",
+        ),
+        details: {
+          limitBytes: 10,
+          remainingBytes: 3,
+          ...(route === "/declared"
+            ? { declaredBytes: 6 }
+            : { receivedBytes: 6 }),
+        },
+      });
       expect(existsSync(path)).toBe(false);
     }
     await saveDownload(await response("/chunked"), path, 6);

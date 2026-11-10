@@ -14,7 +14,7 @@ import {
 import { join } from "node:path";
 import { z } from "zod";
 import type { Config } from "./config.js";
-import { LensError, type Stage } from "./contracts.js";
+import { failure, LensError, type Stage } from "./contracts.js";
 const terminal = ["COMPLETED", "FAILED", "CANCELLED"];
 type Timing = { stage: Stage; startedAt: string; elapsedMs?: number };
 export interface Task {
@@ -24,7 +24,7 @@ export interface Task {
   completedAt?: string;
   stages: Timing[];
   retries: number;
-  error?: { code: string; message: string };
+  error?: ReturnType<typeof failure>;
   warnings?: string[];
   artifacts?: Record<string, string>;
 }
@@ -165,7 +165,15 @@ export class Store {
         for (const f of readdirSync(dir)) used += lstatSync(join(dir, f)).size;
     }
     if (used + additionalBytes > this.settings.maxDiskBytes)
-      throw new LensError("DISK_LIMIT", "缓存空间不足");
+      throw new LensError(
+        "DISK_LIMIT",
+        `缓存已用 ${used} 字节，本次需预留 ${additionalBytes} 字节，超出缓存上限 maxDiskBytes=${this.settings.maxDiskBytes} 字节`,
+        {
+          usedBytes: used,
+          requiredBytes: additionalBytes,
+          limitBytes: this.settings.maxDiskBytes,
+        },
+      );
   }
   create() {
     this.cleanup();

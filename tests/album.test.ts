@@ -150,3 +150,36 @@ it("removes preceding pages if a subsequent public asset fails", async () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+it("stops before fetching the next album page when its shared allowance is exhausted", async () => {
+  const root = mkdtempSync(join(tmpdir(), "lens-album-limit-"));
+  let transfers = 0;
+  const lens = new Lens(
+    configSchema.parse({ cacheDir: root, maxBytes: 1024 }),
+    {
+      resolve: async () => ({ ...normalize(album, url), provider: "test" }),
+      download: async (_u, path) => {
+        transfers++;
+        writeFileSync(path, Buffer.alloc(1024));
+      },
+      worker,
+    },
+  );
+  try {
+    const job = lens.start(url);
+    await job.done;
+    expect(lens.store.task(job.taskId)).toMatchObject({
+      status: "FAILED",
+      error: {
+        code: "SIZE_LIMIT",
+        limitBytes: 1024,
+        remainingBytes: 0,
+        message: expect.stringContaining("已用尽"),
+      },
+    });
+    expect(transfers).toBe(1);
+    expect(readdirSync(lens.store.dir(job.taskId))).toEqual([]);
+  } finally {
+    lens.store.db.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

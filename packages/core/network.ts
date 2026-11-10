@@ -7,7 +7,7 @@ import { pipeline } from "node:stream/promises";
 import ipaddr from "ipaddr.js";
 import { setTimeout as sleep } from "node:timers/promises";
 import { trace } from "./diagnostics.js";
-import { LensError, PublicHttpError } from "./contracts.js";
+import { LensError, mediaSizeLimit, PublicHttpError } from "./contracts.js";
 const pages = [
   "www.douyin.com",
   "douyin.com",
@@ -399,6 +399,7 @@ export async function download(
   max: number,
   signal?: AbortSignal,
   kind: AssetKind = "stream",
+  maxBytes = max,
 ) {
   // Lens.transfer retries the entire body transfer, after partial-file cleanup.
   const { res } = await requestPublicOnce(
@@ -406,23 +407,29 @@ export async function download(
     kind,
     AbortSignal.any([AbortSignal.timeout(120000), ...(signal ? [signal] : [])]),
   );
-  await saveDownload(res, path, max);
+  await saveDownload(res, path, max, maxBytes);
 }
 /** Persist a validated HTTP response under the task byte ceiling. */
 export async function saveDownload(
   res: import("node:http").IncomingMessage,
   path: string,
   max: number,
+  maxBytes = max,
 ) {
-  if (Number(res.headers["content-length"]) > max) {
+  const length = res.headers["content-length"];
+  if (length !== undefined && Number(length) > max) {
     res.destroy();
-    throw new LensError("SIZE_LIMIT", "视频超出大小限制");
+    const declared = Number(length);
+    throw mediaSizeLimit(maxBytes, max, {
+      declaredBytes: Number.isSafeInteger(declared) ? declared : length,
+    });
   }
   let bytes = 0;
   const limit = new Transform({
     transform(chunk: Buffer, _enc, done) {
       bytes += chunk.length;
-      if (bytes > max) done(new LensError("SIZE_LIMIT", "视频超出大小限制"));
+      if (bytes > max)
+        done(mediaSizeLimit(maxBytes, max, { receivedBytes: bytes }));
       else done(null, chunk);
     },
   });

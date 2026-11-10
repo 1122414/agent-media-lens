@@ -11,6 +11,7 @@ import {
   durationLimit,
   failure,
   LensError,
+  mediaSizeLimit,
   PublicHttpError,
   type Candidate,
   type Media,
@@ -394,9 +395,10 @@ export class Lens {
     signal: AbortSignal,
     kind: AssetKind = "stream",
   ) {
-    if (max <= 0) throw new LensError("SIZE_LIMIT", "作品超出大小限制");
+    if (max <= 0) throw mediaSizeLimit(this.settings.maxBytes, 0);
     return retryPublicRead(
-      () => this.io.download(url, path, max, signal, kind),
+      () =>
+        this.io.download(url, path, max, signal, kind, this.settings.maxBytes),
       signal,
       () => this.markRetry(id),
       true,
@@ -411,8 +413,26 @@ export class Lens {
   }
   result(id: string): Result {
     const task = this.store.task(id);
-    if (task.status !== "COMPLETED")
-      throw new LensError("NOT_READY", "任务尚无可读结果");
+    if (task.status !== "COMPLETED") {
+      const details = { taskStatus: task.status };
+      if (task.status === "FAILED") {
+        const cause = task.error;
+        throw new LensError(
+          "NOT_READY",
+          cause
+            ? `任务已失败：${cause.code} — ${cause.message}`
+            : "任务已失败，无可读结果",
+          { ...details, causeCode: cause?.code },
+        );
+      }
+      if (task.status === "CANCELLED")
+        throw new LensError("NOT_READY", "任务已取消，无可读结果", details);
+      throw new LensError(
+        "NOT_READY",
+        `任务尚无可读结果（${task.status}），请稍后查询任务状态`,
+        details,
+      );
+    }
     const data = JSON.parse(
       readFileSync(this.store.file(id, "result.json"), "utf8"),
     );

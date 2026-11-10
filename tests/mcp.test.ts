@@ -75,6 +75,29 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
     expect(toolNames).toContain("media_list_profile");
     const call = (name: string, args: Record<string, unknown>) =>
       client.callTool({ name, arguments: args });
+    const failed = lens.store.create();
+    lens.store.stage(failed.taskId, "FAILED", {
+      error: { code: "SIZE_LIMIT", message: "视频超出大小限制" },
+    });
+    for (const name of [
+      "media_get_result",
+      "media_get_frames",
+      "media_get_transcript",
+    ]) {
+      const rejected = await call(name, { taskId: failed.taskId });
+      expect(rejected.isError).toBe(true);
+      const item = rejected.content[0];
+      expect(item.type).toBe("text");
+      if (item.type === "text")
+        expect(JSON.parse(item.text)).toMatchObject({
+          error: {
+            code: "NOT_READY",
+            taskStatus: "FAILED",
+            causeCode: "SIZE_LIMIT",
+            message: expect.stringContaining("视频超出大小限制"),
+          },
+        });
+    }
     for (const [args, expected] of [
       [{ source: url }, "analysis only"],
       [{ source: url, intent: "create", target: "  " }, "two to three"],
