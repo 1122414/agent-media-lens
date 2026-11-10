@@ -166,6 +166,12 @@ export const workerSchema = z.object({
         page: z.int().positive().optional(),
         text: z.string().max(16000),
         rawText: z.string().max(16000).optional(),
+        foldedLines: z
+          .object({
+            possibleOverlay: z.int().nonnegative(),
+            shortUncertain: z.int().nonnegative(),
+          })
+          .optional(),
         confidence: z.number().min(0).max(100).nullable().optional(),
         repeatedOf: z
           .string()

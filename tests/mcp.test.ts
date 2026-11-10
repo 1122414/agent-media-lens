@@ -169,6 +169,10 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       warnings: ["MODEL_UNAVAILABLE"],
       retained: true,
     });
+    expect(inventory.ocr[0].foldedLines).toMatchObject({
+      possibleOverlay: expect.any(Number),
+      shortUncertain: expect.any(Number),
+    });
     expect(inventory.ocr[0]).not.toHaveProperty("rawText");
     expect(
       data(await call("media_get_result", { ...a, includeRawOcr: true }))

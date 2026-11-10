@@ -12,6 +12,8 @@ import wave
 from pathlib import Path
 from typing import Any
 
+from ocr_evidence import parse_lines, summarize
+
 MEDIA_INPUT = [
     "-protocol_whitelist",
     "file",
@@ -311,37 +313,6 @@ def album_frames(
     return rows
 
 
-def ocr_lines(tsv: str) -> tuple[str, str, float | None]:
-    lines: dict[tuple[str, ...], list[tuple[str, float]]] = {}
-    for row in tsv.splitlines()[1:]:
-        fields = row.split("\t", 11)
-        if len(fields) != 12 or fields[0] != "5" or not fields[11].strip():
-            continue
-        lines.setdefault(tuple(fields[1:5]), []).append(
-            (fields[11].strip(), float(fields[10]))
-        )
-    raw, clean = [], []
-    scores: list[float] = []
-    for words in lines.values():
-        raw.append(" ".join(w for w, _ in words))
-        accepted = [w for w, confidence in words if confidence >= 60]
-        if accepted and any(ch.isalnum() for w in accepted for ch in w):
-            # Do not splice words across a rejected token (e.g. a missing negation).
-            pieces: list[str] = []
-            for word, conf in words:
-                if conf >= 60:
-                    pieces.append(word)
-                elif not pieces or pieces[-1] != "…":
-                    pieces.append("…")
-            clean.append(" ".join(pieces))
-            scores.extend(conf for _, conf in words if conf >= 60)
-    return (
-        "\n".join(raw)[:16000],
-        "\n".join(clean)[:16000],
-        round(sum(scores) / len(scores), 1) if scores else None,
-    )
-
-
 def read_ocr(
     directory: Path,
     images: list[dict[str, Any]],
@@ -350,8 +321,7 @@ def read_ocr(
     duration: float | None,
 ) -> list[dict[str, Any]]:
     event("OCR")
-    ocr = []
-    seen: dict[tuple[int | None, str], str] = {}
+    pages = []
     for image in images:
         tsv = run(
             [
@@ -366,32 +336,8 @@ def read_ocr(
             ],
             60,
         ).decode()
-        raw, clean, confidence = ocr_lines(tsv)
-        sec = image["timestamp"]
-        if (
-            duration
-            and platform == "douyin"
-            and sec is not None
-            and sec >= duration - min(6, duration * 0.15)
-            and "发现更多创作者" in "".join(raw.split())
-        ):
-            image["role"] = "possible_platform_outro"
-        row = {
-            **({"page": image["page"]} if "page" in image else {}),
-            "timestamp": sec,
-            "frameId": image["id"],
-            "text": clean,
-            "rawText": raw,
-            "confidence": confidence,
-        }
-        key = (image.get("page"), clean)
-        if clean:
-            if key in seen:
-                row["repeatedOf"] = seen[key]
-            else:
-                seen[key] = image["id"]
-        ocr.append(row)
-    return ocr
+        pages.append(parse_lines(tsv))
+    return summarize(images, pages, platform, duration)
 
 
 def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
