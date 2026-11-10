@@ -37,6 +37,7 @@ export function worker(
     process.env.MEDIA_LENS_PYTHON || (existsSync(local) ? local : "python3");
   const env = { ...process.env };
   delete env.EVIL0CTAL_API_KEY;
+  env.MEDIA_LENS_ASR_HOTWORDS = c.asrHotwords;
   env.MEDIA_LENS_ASR_PROMPT = c.asrPrompt;
   return new Promise<z.infer<typeof workerSchema>>((ok, fail) => {
     signal.throwIfAborted();

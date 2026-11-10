@@ -75,3 +75,33 @@ def test_rejects_audio_with_wrong_timebase_before_transcription(tmp_path):
     path = fixture_manifest(tmp_path, [{"wav": "bad.wav", "reference": "甲"}])
     with pytest.raises(ValueError, match="16 kHz"):
         evaluation.evaluate(path, False)
+
+
+def test_score_full_recording_uses_time_and_counts_missed_window(tmp_path):
+    ref = tmp_path / "ref.json"
+    ref.write_text(
+        json.dumps(
+            {
+                "vocabulary": ["甲"],
+                "windows": [
+                    {"start": 1, "end": 2, "reference": "甲"},
+                    {"start": 10, "end": 11, "reference": "甲乙"},
+                ],
+            }
+        )
+    )
+    path = tmp_path / "transcript.json"
+    path.write_text(
+        json.dumps(
+            {
+                "status": "ok",
+                "segments": [
+                    {"start": 0, "end": 1, "text": "丙"},
+                    {"start": 9, "end": 11, "text": "甲乙"},
+                ],
+            }
+        )
+    )
+    scores = evaluation.score_recording(ref, path, False)
+    assert scores["edits"] == 1 and scores["referenceChars"] == 3
+    assert (scores["termHits"], scores["termOpportunities"]) == (1, 2)

@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { writeFileSync } from "node:fs";
-import { config } from "../../packages/core/config.js";
+import { asrHotwords, config } from "../../packages/core/config.js";
 import { failure, LensError } from "../../packages/core/contracts.js";
 import { Lens } from "../../packages/core/service.js";
 import { listProfile, profileOptions } from "../../packages/core/profile.js";
@@ -158,12 +158,17 @@ server.registerTool(
         .describe(
           "Retain the normal guest playback rendition when the user has rights to save it.",
         ),
+      asrHotwords: asrHotwords
+        .optional()
+        .describe(
+          "Known terms for every decoding window (128 UTF-8 bytes); includes word-aligned phrase times. Hints are not evidence.",
+        ),
       asrPrompt: z
         .string()
         .max(512)
         .optional()
         .describe(
-          "Optional vocabulary or names for transcription; never treat the prompt as observed speech.",
+          "Optional initial context or writing style for transcription; never treat the prompt as observed speech.",
         ),
       asrFallback: z
         .boolean()

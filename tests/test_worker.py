@@ -225,3 +225,20 @@ def test_ocr_raw_short_terms_page_boundaries_and_outro(tmp_path, monkeypatch):
         frame = {"timestamp": second, "id": "f003", "imagePath": "f003.jpg"}
         read_ocr(tmp_path, [frame], "chi_sim", platform, 33)
         assert (frame.get("role") == "possible_platform_outro") == expected
+
+
+def test_hotword_phrases_use_alignment_only_when_it_preserves_all_text():
+    from media_worker import timed_phrases
+
+    words = [
+        SimpleNamespace(start=a, end=b, word=w)
+        for a, b, w in [(1, 2, " first"), (2, 3, " term"), (6, 7, " later")]
+    ]
+    segment = SimpleNamespace(start=0, end=9, text=" first term later", words=words)
+    assert timed_phrases(segment, True) == [(1, 3, " first term"), (6, 7, " later")]
+    assert timed_phrases(segment, False) == [(0, 9, segment.text)]
+    segment.text += "!"
+    assert timed_phrases(segment, True) == [(0, 9, segment.text)]
+    segment.text = " first term later"
+    words[-1].start = 0
+    assert timed_phrases(segment, True) == [(0, 9, segment.text)]

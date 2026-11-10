@@ -10,6 +10,14 @@ import { projectRoot } from "./processing.js";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { LensError } from "./contracts.js";
+export const asrHotwords = z
+  .string()
+  .trim()
+  .max(128)
+  .refine(
+    (s) => Buffer.byteLength(s, "utf8") <= 128,
+    "词表最多 128 个 UTF-8 字节",
+  );
 export const configSchema = z.strictObject({
   cacheDir: z
     .string()
@@ -30,6 +38,7 @@ export const configSchema = z.strictObject({
     .default("auto"),
   device: z.enum(["auto", "cpu", "cuda"]).default("auto"),
   asrFallback: z.boolean().default(true),
+  asrHotwords: asrHotwords.default(""),
   asrPrompt: z.string().trim().max(512).default(""),
   ocrLang: z
     .string()

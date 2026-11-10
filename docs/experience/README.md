@@ -2,7 +2,7 @@
 
 [Passing decoded audio into ASR](patterns/asr-pcm.md) applies when FFmpeg succeeds but transcription fails opening the WAV. Verified with English and Mandarin clips on the same locked stack.
 
-[Separating recognition from visual evidence](patterns/recognition-evidence.md) applies when a missing model hides usable frames, confidence conflicts with the visible image, or change-driven sampling misses the close. Verified with offline model isolation and three video samples; a [paired Mandarin evaluation](../development/2026-11-10_mandarin-asr-comparison.md) measures agreement with captions on one accented source, not dialect-wide accuracy.
+[Separating recognition from visual evidence](patterns/recognition-evidence.md) applies when a missing model hides usable frames, confidence conflicts with the visible image, or change-driven sampling misses the close. Verified with offline model isolation and three video samples; a [paired Mandarin evaluation](../development/2026-11-10_mandarin-asr-comparison.md) compares isolated clips with full-recording time citations on one accented source, not dialect-wide accuracy.
 
 The same [recognition evidence](patterns/recognition-evidence.md) records a moving watermark and high-confidence short noise on archived frames. For repeated generic download failures, see [open diagnostic cases](unresolved.md): status loss was reproduced offline, but the historical cause is unknown.
 

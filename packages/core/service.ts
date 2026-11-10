@@ -33,6 +33,7 @@ const options = z
     keepPlayback: z.boolean().default(false),
     provider: configSchema.shape.provider.removeDefault().optional(),
     maxFrames: configSchema.shape.maxFrames.removeDefault().optional(),
+    asrHotwords: configSchema.shape.asrHotwords.removeDefault().optional(),
     asrPrompt: configSchema.shape.asrPrompt.removeDefault().optional(),
     asrFallback: z.boolean().optional(),
     model: configSchema.shape.model.removeDefault().optional(),

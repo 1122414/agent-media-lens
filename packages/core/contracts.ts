@@ -122,6 +122,7 @@ export const workerSchema = z.object({
       requestedDevice: z.string(),
       asrFallback: z.boolean(),
       promptConfigured: z.boolean(),
+      hotwordsConfigured: z.boolean().optional(),
       maxFrames: z.int(),
       maxSeconds: z.int(),
       interval: z.number(),

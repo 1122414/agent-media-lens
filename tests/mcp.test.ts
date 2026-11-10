@@ -52,7 +52,10 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
     vi.stubEnv("HF_HOME", join(cache, "isolated-models"));
     vi.stubEnv("HF_HUB_CACHE", join(cache, "isolated-models", "hub"));
     vi.stubEnv("HF_HUB_OFFLINE", "1");
-    const job = lens.start(url, { model: "small" });
+    const job = lens.start(url, {
+      model: "small",
+      asrHotwords: "unobserved-fixture-term",
+    });
     expect(await job.done).toMatchObject({
       status: "COMPLETED",
       warnings: ["MODEL_UNAVAILABLE"],
@@ -161,11 +164,21 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
     ])
       expect((await call(name, a)).isError).toBeFalsy();
     const inventory = data(await call("media_get_result", a));
+    expect(JSON.stringify(inventory)).not.toContain("unobserved-fixture-term");
+    expect(
+      (await call("media_analyze", { url, asrHotwords: "字".repeat(43) }))
+        .isError,
+    ).toBe(true);
     expect(inventory).toMatchObject({
       transcriptStatus: "unavailable",
       platformDuration: 1.5,
       fileDuration: 2,
-      processing: { requestedModel: "small", maxFrames: 30 },
+      processing: {
+        requestedModel: "small",
+        maxFrames: 30,
+        hotwordsConfigured: true,
+        promptConfigured: false,
+      },
       warnings: ["MODEL_UNAVAILABLE"],
       retained: true,
     });

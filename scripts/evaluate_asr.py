@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -54,9 +55,7 @@ def score(
     )
 
 
-def evaluate(manifest: Path, simplify: bool) -> list[dict[str, str | int | float]]:
-    data = json.loads(manifest.read_text(encoding="utf-8"))
-    vocab = data["vocabulary"]
+def vocabulary(vocab: list[str], simplify: bool) -> list[str]:
     if (
         not isinstance(vocab, list)
         or not vocab
@@ -64,8 +63,49 @@ def evaluate(manifest: Path, simplify: bool) -> list[dict[str, str | int | float
     ):
         raise ValueError("vocabulary must be a nonempty list of words")
     words = [normalize(w, simplify) for w in vocab]
+    if "" in words or len(set(words)) != len(words):
+        raise ValueError("expected distinct nonempty vocabulary terms")
+    return words
+
+
+def score_recording(manifest: Path, transcript: Path, simplify: bool) -> dict:
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    words = vocabulary(data["vocabulary"], simplify)
+    recognized = json.loads(transcript.read_text(encoding="utf-8"))
+    if recognized.get("status") not in {"ok", "no_speech"}:
+        raise ValueError("requires a completed transcript")
+    previous_end = 0.0
+    totals: Counter[str] = Counter()
+    windows = []
+    for window in data["windows"]:
+        start, end = window["start"], window["end"]
+        ref = normalize(window["reference"], simplify)
+        if not ref or not (previous_end <= start < end and math.isfinite(end)):
+            raise ValueError("expected ordered nonoverlapping windows with a reference")
+        previous_end = end
+        text = "".join(
+            s["text"]
+            for s in recognized["segments"]
+            if start <= (s["start"] + s["end"]) / 2 < end
+        )
+        counts = score(ref, text, words, simplify)
+        totals.update(counts)
+        windows.append(dict(start=start, end=end, **counts))
+    if not windows:
+        raise ValueError("no reference windows")
+    return dict(
+        windows=windows,
+        **totals,
+        cer=round(totals["edits"] / totals["referenceChars"], 4),
+    )
+
+
+def evaluate(manifest: Path, simplify: bool) -> list[dict[str, str | int | float]]:
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    vocab = data["vocabulary"]
+    words = vocabulary(vocab, simplify)
     prompt = "、".join(vocab) + "。"
-    if "" in words or len(set(words)) != len(words) or len(prompt) > 512:
+    if len(prompt) > 512:
         raise ValueError(
             "use distinct nonempty terms and a prompt of at most 512 characters"
         )
@@ -132,6 +172,16 @@ if __name__ == "__main__":
         action="store_true",
         help="use ICU uconv to compare Han scripts equally",
     )
+    parser.add_argument(
+        "--score-transcript",
+        type=Path,
+        help="score marked windows in a complete transcript.json without cutting the audio",
+    )
     args = parser.parse_args()
     os.environ["HF_HUB_OFFLINE"] = "1"  # set before the worker imports faster-whisper
-    print(json.dumps(evaluate(args.manifest, args.simplify), indent=2))
+    report = (
+        score_recording(args.manifest, args.score_transcript, args.simplify)
+        if args.score_transcript
+        else evaluate(args.manifest, args.simplify)
+    )
+    print(json.dumps(report, indent=2))

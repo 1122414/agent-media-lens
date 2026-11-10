@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import wave
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -124,6 +125,36 @@ def model_snapshot(name: str, fallback: bool) -> tuple[str, str]:
         raise WorkerProblem("MODEL_UNAVAILABLE") from exc
 
 
+def timed_phrases(segment: Any, aligned: bool) -> list[tuple[float, float, str]]:
+    """Only split when aligned words preserve the recognizer's entire segment."""
+    original = [(segment.start, segment.end, segment.text)]
+    words = segment.words if aligned else None
+    if not words or "".join(w.word for w in words).strip() != segment.text.strip():
+        return original
+    if any(
+        not (math.isfinite(w.start) and math.isfinite(w.end) and w.start <= w.end)
+        for w in words
+    ) or any(b.start < a.start or b.end < a.end for a, b in pairwise(words)):
+        return original
+    phrases = []
+    first = 0
+    for i in range(1, len(words) + 1):
+        if (
+            i == len(words)
+            or words[i].start - words[i - 1].end >= 0.8
+            or words[i].end - words[first].start > 5
+        ):
+            phrases.append(
+                (
+                    words[first].start,
+                    words[i - 1].end,
+                    "".join(w.word for w in words[first:i]),
+                )
+            )
+            first = i
+    return phrases
+
+
 def transcribe(
     path: Path,
     model_name: str,
@@ -131,7 +162,10 @@ def transcribe(
     fallback: bool,
     prompt: str,
     duration: float,
+    hotwords: str = "",
 ) -> dict[str, Any]:
+    if len(hotwords.encode("utf-8")) > 128:
+        raise ValueError("hotwords must be at most 128 UTF-8 bytes")
     import ctranslate2
     import numpy as np
     from faster_whisper import WhisperModel
@@ -163,24 +197,27 @@ def transcribe(
             vad_filter=True,
             beam_size=3,
             initial_prompt=prompt or None,
+            hotwords=hotwords or None,
+            word_timestamps=bool(hotwords),
             condition_on_previous_text=True,
         )
         rows = []
         for segment in segments:
-            if not segment.text.strip():
-                continue
-            start = max(0.0, min(duration, segment.start))
-            rows.append(
-                {
-                    "start": start,
-                    "end": max(start, min(duration, segment.end)),
-                    "text": segment.text.strip(),
-                    "avgLogprob": segment.avg_logprob,
-                    "noSpeechProb": segment.no_speech_prob,
-                    "lowConfidence": segment.avg_logprob < -1
-                    or segment.no_speech_prob > 0.6,
-                }
-            )
+            for begin, finish, text in timed_phrases(segment, bool(hotwords)):
+                if not text.strip():
+                    continue
+                start = max(0.0, min(duration, begin))
+                rows.append(
+                    {
+                        "start": start,
+                        "end": max(start, min(duration, finish)),
+                        "text": text.strip(),
+                        "avgLogprob": segment.avg_logprob,
+                        "noSpeechProb": segment.no_speech_prob,
+                        "lowConfidence": segment.avg_logprob < -1
+                        or segment.no_speech_prob > 0.6,
+                    }
+                )
     except RuntimeError as exc:
         raise WorkerProblem("ASR_FAILED") from exc
     return {
@@ -346,11 +383,13 @@ def read_ocr(
 
 def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
     prompt = os.environ.get("MEDIA_LENS_ASR_PROMPT", "")
+    hotwords = os.environ.get("MEDIA_LENS_ASR_HOTWORDS", "")
     processing = {
         "requestedModel": options.model,
         "requestedDevice": options.device,
         "asrFallback": not options.no_asr_fallback,
         "promptConfigured": bool(prompt),
+        "hotwordsConfigured": bool(hotwords),
         "maxFrames": options.max_frames,
         "maxSeconds": options.max_seconds,
         "interval": options.interval,
@@ -424,6 +463,7 @@ def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
                     not options.no_asr_fallback,
                     prompt,
                     duration,
+                    hotwords,
                 )
                 if transcript.get("warning"):
                     warnings.append(transcript["warning"])
@@ -431,7 +471,11 @@ def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
                 warnings.append("ASR_FAILED")
                 transcript.update(status="unavailable", warning="ASR_FAILED")
             except WorkerProblem as exc:
-                if str(exc) not in {"MODEL_UNAVAILABLE", "MODEL_CACHE_DENIED", "ASR_FAILED"}:
+                if str(exc) not in {
+                    "MODEL_UNAVAILABLE",
+                    "MODEL_CACHE_DENIED",
+                    "ASR_FAILED",
+                }:
                     raise
                 warnings.append(str(exc))
                 transcript.update(status="unavailable", warning=str(exc))

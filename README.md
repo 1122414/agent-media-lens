@@ -64,7 +64,8 @@ Follow the [Douyin setup](docs/providers/douyin.md) for an independent Evil0ctal
 | maxDiskBytes / concurrency | 10000000000 / 1 | Task admission |
 | retentionDays | 7 | Expiry of original video at admission or explicit cleanup |
 | interval / maxFrames | 4 seconds / 30 | Baseline sampling and frame cap |
-| asrPrompt / asrFallback | empty / true | Optional vocabulary hint (512 characters); true allows fetching the requested model and falling back to cached base; false uses only the requested local model |
+| asrHotwords | empty | Optional recurring names or terms (128 UTF-8 bytes); constrains prompt size and enables word alignment for time citations. CLI: `--asr-hotwords`. Hints are not evidence. |
+| asrPrompt / asrFallback | empty / true | Optional initial context or style (512 characters); true allows fetching the requested model and falling back to cached base; false uses only the requested local model |
 | model / device | auto / auto | CPU base int8 or CUDA small FP16; manual overrides supported |
 | ocrLang | chi_sim+eng | Installed Tesseract languages |
 
