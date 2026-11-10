@@ -243,6 +243,43 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       expect(
         Buffer.from(content.data, "base64").subarray(0, 2).toString("hex"),
       ).toBe("ffd8");
+    const label = (res: typeof result) => {
+      expect(res.isError).toBeFalsy();
+      expect(res.content.map((c) => c.type)).toEqual(["image", "text"]);
+      const block = res.content[1];
+      if (block.type !== "text") throw Error("no frame label");
+      return JSON.parse(block.text);
+    };
+    expect(label(result)).toEqual({ id: "f000", timestamp: 0 });
+    // The platform says 1.5s; the decoded clip is 2s. Its last sample is at 1s.
+    for (const timestamp of [0.8, 2]) {
+      const actual = await call("media_get_frame", { ...a, timestamp });
+      expect(label(actual)).toEqual({ id: "f001", timestamp: 1 });
+      const byId = await call("media_get_frame", { ...a, frameId: "f001" });
+      expect(actual.content[0]).toEqual(byId.content[0]);
+    }
+    for (const [name, args, code] of [
+      ["media_get_frame", { timestamp: 2.001 }, "INVALID_SELECTOR"],
+      ["media_get_frame", { timestamp: 99999 }, "INVALID_SELECTOR"],
+      ["media_get_frame", { page: 2 }, "PAGE_NOT_APPLICABLE"],
+      ["media_get_frame", { page: 2, frameId: "f000" }, "PAGE_NOT_APPLICABLE"],
+      ["media_get_frames", { page: 2 }, "PAGE_NOT_APPLICABLE"],
+      ["media_list_frames", { page: 2 }, "PAGE_NOT_APPLICABLE"],
+    ] as const) {
+      const rejected = await call(name, { ...a, ...args });
+      expect(rejected.isError).toBe(true);
+      expect(rejected.content.map((c) => c.type)).toEqual(["text"]);
+      const block = rejected.content[0];
+      if (block.type === "text")
+        expect(JSON.parse(block.text).error.code).toBe(code);
+    }
+    const empty = await call("media_get_frames", {
+      ...a,
+      start: 0.25,
+      end: 0.5,
+    });
+    expect(empty.isError).toBeFalsy();
+    expect(empty.content).toEqual([]);
     expect((await call("media_get_frames", { ...a, limit: 4 })).isError).toBe(
       true,
     );

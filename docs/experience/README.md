@@ -10,7 +10,7 @@ The same [recognition evidence](patterns/recognition-evidence.md) records a movi
 
 [Media CDN redirects](patterns/media-cdn-redirect.md) applies when a verified platform download is rejected during transfer. The redirect shape was exercised twice on one live post; separate CDN 403 transfers and tests cover scoped headers, alternatives and a single fresh resolution.
 
-[Album media lives on each page](patterns/album-pages.md) applies when an image album has a post-level video or duration. Verified on a three-page live album and in provider tests.
+[Album media lives on each page](patterns/album-pages.md) applies when an image album has a post-level video or duration, or a frame lookup confuses video seconds with an album page clock. Verified on a three-page live album, an archived video and local selector tests.
 
 [Match a Bilibili player to a part](patterns/bilibili-parts.md) applies to shares with a page query and multi-part post durations. Verified with a 13-part public upload and covered with isolated mismatch, preview and segmented-media tests.
 

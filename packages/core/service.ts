@@ -54,6 +54,25 @@ export interface Result extends Evidence {
   retained?: boolean;
   artifacts: Record<string, string>;
 }
+type FrameSelector = { frameId?: string; timestamp?: number; page?: number };
+function filterFrames(r: Result, start?: number, end?: number, page?: number) {
+  if (r.media.kind !== "image_album" && page !== undefined)
+    throw new LensError("PAGE_NOT_APPLICABLE", "视频没有图集页码，请移除 page");
+  if (
+    r.media.kind === "image_album" &&
+    page === undefined &&
+    (start !== undefined || end !== undefined)
+  )
+    throw new LensError("PAGE_REQUIRED", "图集的时间范围需要指定页码");
+  return r.frames.filter(
+    (f) =>
+      (page === undefined || f.page === page) &&
+      ((start === undefined && end === undefined) ||
+        (f.timestamp !== null &&
+          f.timestamp >= (start ?? 0) &&
+          f.timestamp <= (end ?? Infinity))),
+  );
+}
 function displaySpeech(text: string, language: string | null) {
   return language === "zh"
     ? text.replace(
@@ -447,21 +466,7 @@ export class Lens {
     };
   }
   frames(id: string, start?: number, end?: number, page?: number) {
-    const r = this.result(id);
-    if (
-      r.media.kind === "image_album" &&
-      page === undefined &&
-      (start !== undefined || end !== undefined)
-    )
-      throw new LensError("PAGE_REQUIRED", "图集的时间范围需要指定页码");
-    return r.frames.filter(
-      (f) =>
-        (page === undefined || f.page === page) &&
-        ((start === undefined && end === undefined) ||
-          (f.timestamp !== null &&
-            f.timestamp >= (start ?? 0) &&
-            f.timestamp <= (end ?? Infinity))),
-    );
+    return filterFrames(this.result(id), start, end, page);
   }
   transcript(id: string, start = 0, end = Infinity, offset = 0, limit = 100) {
     const t = this.result(id).transcript;
@@ -494,27 +499,45 @@ export class Lens {
         offset + segments.length < all.length ? offset + segments.length : null,
     };
   }
-  image(
-    id: string,
-    selector: { frameId?: string; timestamp?: number; page?: number },
-  ) {
-    const frames = this.frames(
-      id,
-      selector.timestamp === undefined ? undefined : 0,
+  image(id: string, selector: FrameSelector) {
+    return this.frameImage(id, selector).image;
+  }
+  frameImage(id: string, { frameId, timestamp, page }: FrameSelector) {
+    const r = this.result(id);
+    const frames = filterFrames(
+      r,
+      timestamp === undefined ? undefined : 0,
       undefined,
-      selector.page,
+      page,
     );
-    const frame = selector.frameId
-      ? frames.find((f) => f.id === selector.frameId)
-      : frames.reduce<(typeof frames)[number] | undefined>(
-          (near, f) =>
-            !near ||
-            Math.abs(f.timestamp! - selector.timestamp!) <
-              Math.abs(near.timestamp! - selector.timestamp!)
-              ? f
-              : near,
-          undefined,
+    if ((frameId === undefined) === (timestamp === undefined))
+      throw new LensError("INVALID_SELECTOR", "请选择帧 ID 或时间戳");
+    if (timestamp !== undefined) {
+      const duration =
+        r.media.kind === "image_album" ? null : (r.fileDuration ?? r.duration);
+      const upper =
+        duration ??
+        (frames.length ? Math.max(...frames.map((f) => f.timestamp!)) : null);
+      if (!Number.isFinite(timestamp) || timestamp < 0)
+        throw new LensError("INVALID_SELECTOR", "时间戳必须是非负有限秒数");
+      if (upper !== null && timestamp > upper)
+        throw new LensError(
+          "INVALID_SELECTOR",
+          `请求 ${timestamp}s 超出${duration != null ? "视频解码时长" : "已知采样时间范围"}（0–${upper}s），请用 media_list_frames 查看可用帧`,
         );
+    }
+    const frame =
+      timestamp === undefined
+        ? frames.find((f) => f.id === frameId)
+        : frames.reduce<(typeof frames)[number] | undefined>(
+            (near, f) =>
+              !near ||
+              Math.abs(f.timestamp! - timestamp) <
+                Math.abs(near.timestamp! - timestamp)
+                ? f
+                : near,
+            undefined,
+          );
     if (!frame) throw new LensError("NOT_FOUND", "关键帧不存在");
     const path = this.store.file(id, frame.imagePath);
     if (statSync(path).size > 512000)
@@ -523,9 +546,12 @@ export class Lens {
     if (bytes.length > 512000 || bytes[0] !== 255 || bytes[1] !== 216)
       throw new LensError("INVALID_IMAGE", "图片格式或大小无效");
     return {
-      type: "image" as const,
-      mimeType: "image/jpeg",
-      data: bytes.toString("base64"),
+      label: { id: frame.id, page: frame.page, timestamp: frame.timestamp },
+      image: {
+        type: "image" as const,
+        mimeType: "image/jpeg",
+        data: bytes.toString("base64"),
+      },
     };
   }
 }

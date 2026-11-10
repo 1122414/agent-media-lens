@@ -112,9 +112,25 @@ it("processes mixed pages with local timestamps, a shared byte limit and transie
     expect(
       lens.frames(task.taskId, undefined, undefined, 1)[0].timestamp,
     ).toBeNull();
-    expect(() => lens.image(task.taskId, { timestamp: 0 })).toThrow();
-    expect(lens.image(task.taskId, { page: 2, timestamp: 1 }).mimeType).toBe(
-      "image/jpeg",
+    expect(() => lens.image(task.taskId, { timestamp: 0 })).toThrowError(
+      expect.objectContaining({ code: "PAGE_REQUIRED" }),
+    );
+    expect(
+      lens.frameImage(task.taskId, { frameId: "f000", page: 1 }).label,
+    ).toEqual({ id: "f000", page: 1, timestamp: null });
+    expect(
+      lens.frameImage(task.taskId, { page: 2, timestamp: 1 }),
+    ).toMatchObject({
+      label: { id: "f003", page: 2, timestamp: 1.3 },
+      image: { mimeType: "image/jpeg" },
+    });
+    expect(() =>
+      lens.image(task.taskId, { page: 2, timestamp: 99999 }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "INVALID_SELECTOR",
+        message: expect.stringContaining("已知采样时间范围"),
+      }),
     );
     expect(
       readdirSync(lens.store.dir(task.taskId)).some((f) =>

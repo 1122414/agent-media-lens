@@ -227,7 +227,7 @@ server.registerTool(
   "media_get_frame",
   {
     description:
-      "Read one real JPEG by frameId or nearest timestamp in seconds.",
+      "Read a JPEG by frameId or nearest in-range timestamp, followed by its actual frame ID, sample time and album page when applicable. Use page only on albums.",
     inputSchema: z.object({
       taskId,
       page,
@@ -240,9 +240,8 @@ server.registerTool(
   },
   (a) =>
     call("get_frame", () => {
-      if ((a.frameId === undefined) === (a.timestamp === undefined))
-        throw new LensError("INVALID_SELECTOR", "请选择帧 ID 或时间戳");
-      return { content: [lens.image(a.taskId, a)] };
+      const { image, label } = lens.frameImage(a.taskId, a);
+      return { content: [image, ...json(label).content] };
     }),
 );
 server.registerTool(
