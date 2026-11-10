@@ -190,6 +190,19 @@ def overlay(
     )
 
 
+def outro_account(line: Line, frame: int, reads: list[AccountRead]) -> bool:
+    # Cards put the account in the middle. A legible explicit label is sufficient;
+    # a damaged label needs the exact digits from an earlier corner watermark.
+    if re.fullmatch(r"抖音号[:：][0-9]+", "".join(line.raw.split())):
+        return True
+    digits = account_digits(line)
+    return (
+        bool(digits)
+        and line.text.replace("…", "").strip() == digits
+        and any(r.frame < frame and r.digits == digits for r in reads)
+    )
+
+
 def short_noise(line: Line, nearby: list[Line]) -> bool:
     text = line.text.replace("…", "").strip()
     chars = [c for c in text if c.isalnum()]
@@ -232,13 +245,14 @@ def summarize(
     for i, (image, lines) in enumerate(zip(images, pages, strict=True)):
         raw = "\n".join(line.raw for line in lines)[:16000]
         sec = image["timestamp"]
-        if (
+        is_outro = bool(
             duration
             and platform == "douyin"
             and sec is not None
             and sec >= duration - min(6, duration * 0.15)
             and "发现更多创作者" in "".join(raw.split())
-        ):
+        )
+        if is_outro:
             image["role"] = "possible_platform_outro"
         kept: list[str] = []
         scores: list[float] = []
@@ -246,7 +260,9 @@ def summarize(
         for n, line in enumerate(lines):
             if not line.text:
                 continue
-            if overlay(line, i, anchors, reads):
+            if overlay(line, i, anchors, reads) or (
+                is_outro and outro_account(line, i, reads)
+            ):
                 overlay_count += 1
             elif short_noise(line, lines[max(0, n - 3) : n + 4]):
                 short_count += 1
