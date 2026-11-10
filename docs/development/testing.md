@@ -1,6 +1,8 @@
 # Verification
 
-Run pnpm build, pnpm lint, pnpm test, uv run ruff check workers scripts/douyin-login.py tests, uv run mypy workers, uv run pytest -q tests, and node scripts/check-plugin.mjs. Build before testing because the stdio test launches the compiled entry point.
+Run pnpm build, pnpm lint, pnpm test, uv run ruff check workers scripts tests, uv run mypy workers, uv run pytest -q tests, and node scripts/check-plugin.mjs. Build before testing because the stdio test launches the compiled entry point.
+
+For voiced-model quality comparisons, see the [Mandarin CPU experiment and local evaluation recipe](2026-11-10_mandarin-asr-comparison.md). The model weights and reference media are not required for CI.
 
 Tests that start FFmpeg, Tesseract and the real Python worker use a per-case timeout (20–30 seconds). The five-second unit-test default interrupted a mixed-album run on a shared [Linux runner](https://github.com/1122414/agent-media-lens/actions/runs/42589627084/job/129067785112); the frame, OCR, page, byte-budget and cleanup assertions remain mandatory.
 

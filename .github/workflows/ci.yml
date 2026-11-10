@@ -24,7 +24,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: uv sync --frozen --python 3.12
       - run: pnpm build && pnpm lint && pnpm test
-      - run: uv run --frozen ruff check workers scripts/douyin-login.py tests && uv run --frozen mypy workers && uv run --frozen pytest -q tests
+      - run: uv run --frozen ruff check workers scripts tests && uv run --frozen mypy workers && uv run --frozen pytest -q tests
       - run: node scripts/check-plugin.mjs
   container:
     runs-on: ubuntu-latest
