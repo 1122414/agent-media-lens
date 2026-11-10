@@ -106,7 +106,12 @@ export const stages = [
   "CANCELLED",
 ] as const;
 export type Stage = (typeof stages)[number];
-const warning = z.enum(["MODEL_UNAVAILABLE", "MODEL_FALLBACK", "ASR_FAILED"]);
+const warning = z.enum([
+  "MODEL_UNAVAILABLE",
+  "MODEL_CACHE_DENIED",
+  "MODEL_FALLBACK",
+  "ASR_FAILED",
+]);
 export const workerSchema = z.object({
   duration: z.number().positive().nullable(),
   warnings: z.array(warning).optional(),

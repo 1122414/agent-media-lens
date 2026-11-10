@@ -152,17 +152,26 @@ cli
 cli.command("identify <url>").action(async (url) => show(await identify(url)));
 cli
   .command("resolve <url>")
-  .option("--provider <name>")
+  .option(
+    "--provider <name>",
+    "抖音详情与视频使用 evil0ctal；native 可识别抖音链接",
+  )
   .action(async (url, o) =>
     show(await service().resolve(url, provider.parse(o.provider))),
   );
 cli
   .command("analyze <url>")
-  .option("--provider <name>")
+  .option(
+    "--provider <name>",
+    "抖音详情与视频使用 evil0ctal；native 可识别抖音链接",
+  )
   .option("--discard-original", "处理后立即删除原片")
   .option("--keep-playback", "有权保存时，保留访客可观看的播放版本")
   .option("--model <name>")
-  .option("--strict-model", "缺少指定模型时仅返回视觉证据，不回退到 base")
+  .option(
+    "--strict-model",
+    "仅使用本机缓存的指定模型，不下载、不回退；缺少模型时仍返回画面",
+  )
   .option("--asr-prompt <terms>", "可选转写词汇提示，最多 512 个字符")
   .option("--max-frames <n>", "关键帧上限", Number)
   .action(async (url, o) => {

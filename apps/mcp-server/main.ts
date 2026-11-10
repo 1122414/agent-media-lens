@@ -165,7 +165,12 @@ server.registerTool(
         .describe(
           "Optional vocabulary or names for transcription; never treat the prompt as observed speech.",
         ),
-      asrFallback: z.boolean().optional(),
+      asrFallback: z
+        .boolean()
+        .optional()
+        .describe(
+          "False uses only the requested local model: no download or fallback; visual evidence is still returned.",
+        ),
       maxFrames: z.int().min(1).max(120).optional(),
       model: z
         .enum(["auto", "tiny", "base", "small", "medium", "large-v3"])

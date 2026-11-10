@@ -93,17 +93,21 @@ def model_snapshot(name: str, fallback: bool) -> tuple[str, str]:
     from faster_whisper.utils import download_model
 
     def locate(size: str, local: bool) -> str:
-        snapshot = str(download_model(size, local_files_only=local))
-        # A snapshot directory alone can be left behind by an interrupted download.
-        for filename in ("model.bin", "config.json", "tokenizer.json"):
-            if not (Path(snapshot) / filename).is_file():
-                raise FileNotFoundError(filename)
-        return snapshot
+        try:
+            snapshot = str(download_model(size, local_files_only=local))
+            # A snapshot directory alone can survive an interrupted download.
+            for filename in ("model.bin", "config.json", "tokenizer.json"):
+                with (Path(snapshot) / filename).open("rb"):
+                    pass
+            return snapshot
+        except PermissionError as exc:
+            raise WorkerProblem("MODEL_CACHE_DENIED") from exc
 
     try:
         return locate(name, True), name
-    except FileNotFoundError:
-        pass
+    except FileNotFoundError as exc:
+        if not fallback:
+            raise WorkerProblem("MODEL_UNAVAILABLE") from exc
     try:
         return locate(name, False), name
     except OSError as exc:
@@ -112,7 +116,7 @@ def model_snapshot(name: str, fallback: bool) -> tuple[str, str]:
             exc, (ConnectionError, TimeoutError, FileNotFoundError)
         ):
             raise
-        if fallback and name != "base":
+        if name != "base":
             try:
                 return locate("base", True), "base"
             except FileNotFoundError:
@@ -427,7 +431,7 @@ def process(directory: Path, options: argparse.Namespace) -> dict[str, Any]:
                 warnings.append("ASR_FAILED")
                 transcript.update(status="unavailable", warning="ASR_FAILED")
             except WorkerProblem as exc:
-                if str(exc) not in {"MODEL_UNAVAILABLE", "ASR_FAILED"}:
+                if str(exc) not in {"MODEL_UNAVAILABLE", "MODEL_CACHE_DENIED", "ASR_FAILED"}:
                     raise
                 warnings.append(str(exc))
                 transcript.update(status="unavailable", warning=str(exc))

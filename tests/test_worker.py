@@ -87,18 +87,22 @@ def test_model_cache_fallback_only_for_resolution(tmp_path, monkeypatch):
     monkeypatch.setattr("faster_whisper.utils.download_model", download)
     assert model_snapshot("small", True) == (str(tmp_path), "base")
     assert calls == [("small", True), ("small", False), ("base", True)]
+    calls.clear()
     with pytest.raises(ValueError, match="MODEL_UNAVAILABLE"):
         model_snapshot("small", False)
+    assert calls == [("small", True)]
 
     def denied(*args, **kwargs):
         raise PermissionError(13, "access denied")
 
     monkeypatch.setattr("faster_whisper.utils.download_model", denied)
-    with pytest.raises(PermissionError):
-        model_snapshot("small", True)
+    for fallback in (True, False):
+        with pytest.raises(ValueError, match="MODEL_CACHE_DENIED"):
+            model_snapshot("small", fallback)
 
 
-def test_missing_offline_model_keeps_real_visual_evidence(tmp_path):
+@pytest.mark.parametrize("flags", [[], ["--no-asr-fallback"]])
+def test_missing_offline_model_keeps_real_visual_evidence(tmp_path, flags):
     subprocess.run(
         [
             "ffmpeg",
@@ -130,6 +134,7 @@ def test_missing_offline_model_keeps_real_visual_evidence(tmp_path):
             sys.executable,
             str(ROOT / "workers/media_worker.py"),
             str(tmp_path),
+            *flags,
             "--model",
             "small",
             "--ocr-lang",
