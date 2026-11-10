@@ -106,7 +106,8 @@ docker compose -f compose.yaml -f compose.local-provider.yaml run --rm -T lens d
 - 用 MEDIA_LENS_CONFIG 指定 JSON 文件，用 MEDIA_LENS_CACHE 覆盖缓存目录，运行 media-lens config 查看生效配置。默认并发 1、时长 600 秒、单文件 500 MB、缓存预算 10 GB、原片保留 7 天。启动新任务或运行 cleanup 时清除过期原片。
 - 单次分析可加 --discard-original，处理结束即清理原片；MCP 对应字段为 discardOriginal。
 - 初始抽帧间隔 4 秒，上限 30 帧；普通 CPU 默认 base/int8。可设置 interval、maxFrames、model、device 和 ocrLang。字段与默认值见[英文配置表](README.md)。
-- 已知作品里的专名时，可用 `media-lens analyze "$SHARE_URL" --asr-hotwords "术语一,术语二"`（MCP：`asrHotwords`）。短词表最多 128 个 UTF-8 字节，会在每个识别窗口使用，并为语句做时间对齐。原有 `--asr-prompt`（`asrPrompt`）只提供开头上下文或书写风格。提示不能当作说过该词的证据。[短片与整片实测](docs/development/2026-11-10_mandarin-asr-comparison.md)
+- 已知作品里的专名时，可用 `media-lens analyze "$SHARE_URL" --asr-hotwords "术语一,术语二"`（MCP：`asrHotwords`）。词表会在每个识别窗口使用，上限为 128 个 UTF-8 字节。例如，用半角逗号分隔常用四字中文词，9 个词占 116 字节，10 个占 129 字节。优先填写最容易听错的专名。原有 `--asr-prompt`（`asrPrompt`）只提供开头上下文或书写风格。提示不能当作说过该词的证据。[短片与整片实测](docs/development/2026-11-10_mandarin-asr-comparison.md)
+- 热词会启用逐词时间对齐。在同一条 1002.7 秒视频的两次 CPU/base 任务中，转写阶段分别用时 28.5 秒（无提示）和 107.0 秒（热词），后者约为前者的 3.75 倍。这是该样本的转写耗时，不能作为其他视频或整项任务的固定倍率。
 - 默认尝试取得所选模型，失败时可回退到已缓存的 base。`--strict-model`（`asrFallback: false`）只读指定模型的本机缓存，不下载也不回退。模型不可用时仍返回画面，任务警告区分缺模型和模型缓存权限不足。
 - B 站支持 BV、av 视频链接和 b23.tv 短链，保留指定的分 P。给采集服务密钥配置 `bilibili:read`，用 `media-lens doctor --platform bilibili` 核对。访客可读的单文件 MP4 可直接分析，默认每 P 最长 10 分钟。详见 [B 站适配说明](docs/providers/bilibili.md)。
 - 图文和实况照片按页分析，静态页生成一张 JPEG，实况页额外生成两帧动态证据。用 frames <任务号> --page 3 或 MCP 的 page 参数读取第三页，静态页没有时间戳。原生适配器目前可解析链接，元数据和下载依赖外部服务。

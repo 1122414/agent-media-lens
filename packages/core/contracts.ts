@@ -37,11 +37,16 @@ export function failure(err: unknown) {
       retryAfterSeconds: err.retryAfterSeconds,
     };
   if (err instanceof LensError) return { code: err.code, message: err.message };
-  if (err instanceof z.ZodError)
+  if (err instanceof z.ZodError) {
+    // Only our local ASR limit checks produce a safe length-only message.
+    const limit = err.issues.find(
+      (i) => i.code === "custom" && i.params?.asrLengthLimit === true,
+    );
     return {
       code: "INVALID_DATA",
-      message: "输入或外部服务的数据格式不符合约定",
+      message: limit?.message ?? "输入或外部服务的数据格式不符合约定",
     };
+  }
   return {
     code: "IO_ERROR",
     message: "操作失败，请检查服务、文件权限和运行环境",

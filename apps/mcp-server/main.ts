@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { writeFileSync } from "node:fs";
-import { asrHotwords, config } from "../../packages/core/config.js";
+import { asrHotwords, asrPrompt, config } from "../../packages/core/config.js";
 import { failure, LensError } from "../../packages/core/contracts.js";
 import { Lens } from "../../packages/core/service.js";
 import { listProfile, profileOptions } from "../../packages/core/profile.js";
@@ -163,9 +163,7 @@ server.registerTool(
         .describe(
           "Known terms for every decoding window (128 UTF-8 bytes); includes word-aligned phrase times. Hints are not evidence.",
         ),
-      asrPrompt: z
-        .string()
-        .max(512)
+      asrPrompt: asrPrompt
         .optional()
         .describe(
           "Optional initial context or writing style for transcription; never treat the prompt as observed speech.",

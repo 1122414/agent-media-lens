@@ -173,10 +173,13 @@ cli
     "--strict-model",
     "仅使用本机缓存的指定模型，不下载、不回退；缺少模型时仍返回画面",
   )
-  .option("--asr-prompt <text>", "转写开头的上下文或书写风格，最多 512 个字符")
+  .option(
+    "--asr-prompt <text>",
+    "转写开头的上下文或书写风格，最多 512 个 UTF-16 码元",
+  )
   .option(
     "--asr-hotwords <terms>",
-    "各窗口重复使用的已知专名，最多 128 个 UTF-8 字节；启用逐词对齐",
+    "各窗口重复使用的专名；128 个 UTF-8 字节可容纳 9 个用半角逗号隔开的常用四字词。启用逐词对齐，转写可能更慢",
   )
   .option("--max-frames <n>", "关键帧上限", Number)
   .action(async (url, o) => {

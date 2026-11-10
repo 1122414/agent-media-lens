@@ -10,14 +10,24 @@ import { projectRoot } from "./processing.js";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { LensError } from "./contracts.js";
-export const asrHotwords = z
-  .string()
-  .trim()
-  .max(128)
-  .refine(
-    (s) => Buffer.byteLength(s, "utf8") <= 128,
-    "词表最多 128 个 UTF-8 字节",
-  );
+function asrText(field: "asrHotwords" | "asrPrompt", max: number) {
+  return z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      const bytes = field === "asrHotwords";
+      const length = bytes ? Buffer.byteLength(value, "utf8") : value.length;
+      if (length > max)
+        ctx.addIssue({
+          code: "custom",
+          params: { asrLengthLimit: true },
+          message: `${field} 最多 ${max} 个 ${bytes ? "UTF-8 字节" : "UTF-16 码元"}（当前 ${length}）`,
+        });
+    })
+    .meta({ maxLength: max });
+}
+export const asrHotwords = asrText("asrHotwords", 128);
+export const asrPrompt = asrText("asrPrompt", 512);
 export const configSchema = z.strictObject({
   cacheDir: z
     .string()
@@ -39,7 +49,7 @@ export const configSchema = z.strictObject({
   device: z.enum(["auto", "cpu", "cuda"]).default("auto"),
   asrFallback: z.boolean().default(true),
   asrHotwords: asrHotwords.default(""),
-  asrPrompt: z.string().trim().max(512).default(""),
+  asrPrompt: asrPrompt.default(""),
   ocrLang: z
     .string()
     .regex(/^[a-z_]+(?:\+[a-z_]+)*$/)

@@ -65,9 +65,11 @@ Follow the [Douyin setup](docs/providers/douyin.md) for an independent Evil0ctal
 | retentionDays | 7 | Expiry of original video at admission or explicit cleanup |
 | interval / maxFrames | 4 seconds / 30 | Baseline sampling and frame cap |
 | asrHotwords | empty | Optional recurring names or terms (128 UTF-8 bytes); constrains prompt size and enables word alignment for time citations. CLI: `--asr-hotwords`. Hints are not evidence. |
-| asrPrompt / asrFallback | empty / true | Optional initial context or style (512 characters); true allows fetching the requested model and falling back to cached base; false uses only the requested local model |
+| asrPrompt / asrFallback | empty / true | Optional initial context or style (512 UTF-16 code units); true allows fetching the requested model and falling back to cached base; false uses only the requested local model |
 | model / device | auto / auto | CPU base int8 or CUDA small FP16; manual overrides supported |
 | ocrLang | chi_sim+eng | Installed Tesseract languages |
+
+For Chinese hotwords, nine four-character terms made of common Han characters and separated by ASCII commas use 116 bytes; ten use 129 and exceed the limit. Choose the names most likely to be misheard. In two CPU/base runs on the same 1,002.7-second video, transcription took 28.5 seconds without hints and 107.0 seconds with hotwords and word alignment (about 3.75×). This measures the transcription stage on one sample, not an end-to-end multiplier.
 
 ```sh
 media-lens identify "$SHARE_URL"

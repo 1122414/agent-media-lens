@@ -165,10 +165,6 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       expect((await call(name, a)).isError).toBeFalsy();
     const inventory = data(await call("media_get_result", a));
     expect(JSON.stringify(inventory)).not.toContain("unobserved-fixture-term");
-    expect(
-      (await call("media_analyze", { url, asrHotwords: "字".repeat(43) }))
-        .isError,
-    ).toBe(true);
     expect(inventory).toMatchObject({
       transcriptStatus: "unavailable",
       platformDuration: 1.5,
@@ -222,6 +218,31 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
         [join(projectRoot, "dist/apps/cli/main.js"), ...args],
         { encoding: "utf8", env: { ...process.env, ...env } },
       );
+    for (const [field, flag, value, expected] of [
+      [
+        "asrHotwords",
+        "--asr-hotwords",
+        "密".repeat(63),
+        "asrHotwords 最多 128 个 UTF-8 字节（当前 189）",
+      ],
+      [
+        "asrPrompt",
+        "--asr-prompt",
+        "隐".repeat(600),
+        "asrPrompt 最多 512 个 UTF-16 码元（当前 600）",
+      ],
+    ] as const) {
+      const mcpError = await call("media_analyze", { url, [field]: value });
+      expect(mcpError.isError).toBe(true);
+      expect(JSON.stringify(mcpError.content)).toContain(expected);
+      expect(JSON.stringify(mcpError.content)).not.toContain(value);
+      const rejected = cli(["analyze", url, flag, value]);
+      expect(rejected.status).toBe(1);
+      expect(JSON.parse(rejected.stderr)).toEqual({
+        code: "INVALID_DATA",
+        message: expected,
+      });
+    }
     expect(JSON.parse(cli(["task", a.taskId]).stdout).status).toBe("COMPLETED");
     expect(cli(["frames", a.taskId, "--markdown"]).stdout).toContain(
       "# AgentMediaLens",
