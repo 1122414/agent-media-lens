@@ -34,22 +34,27 @@ Preview the metadata selection with `media-lens compare "$PROFILE_URL" --sample-
 
 Run `media-lens profile "$PROFILE_URL" --count 5` for either platform, or call `media_list_profile` from the plugin. It returns canonical links, titles, upload times, duration and the available engagement counts without opening a browser. Use the returned view and cursor to continue. A collection has a separate scope from all uploads. [Profile contract](docs/architecture/data-contracts.md). For opt-in, browser-free Douyin upload queries with a locally reserved login, see [setup and revocation](docs/providers/douyin.md#optional-local-login-for-public-uploads).
 
-## Install from source
+## Install on macOS or Linux
 
-Use Node 24 (24.12+) or 26, pnpm 11.5, Python 3.12, uv, FFmpeg/ffprobe, and Tesseract with eng and chi_sim. On Debian/Ubuntu install ffmpeg, tesseract-ocr-eng and tesseract-ocr-chi-sim. On macOS Homebrew provides ffmpeg, tesseract and tesseract-lang. The runtime stores weights separately and downloads a missing Whisper model on first voiced analysis.
+Start Docker with Compose v2+ and have Git available (or extract the release source). Codex CLI is needed for automatic plugin registration. This path does not require host Node, pnpm, Python, FFmpeg or Tesseract.
 
 ```sh
-git clone https://github.com/1122414/agent-media-lens.git
+git clone --branch v0.5.0 https://github.com/1122414/agent-media-lens.git
 cd agent-media-lens
-pnpm install --frozen-lockfile
-uv sync --frozen --python 3.12
-pnpm build
-sh scripts/install-launchers.sh
-export PATH="$HOME/.local/bin:$PATH"
-media-lens doctor
+./media-lens install
+./media-lens doctor --local
 ```
 
-Doctor checks local binaries and the configured provider. For Evil0ctal it exits with status 1 if the API is unreachable, the key lacks access, or the selected platform has no available guest identities. Use `media-lens doctor --platform bilibili` to check Bilibili. An OK check does not establish download permission for a particular video. Link identification and existing-task evidence reads work independently.
+The installer builds a local image, checks speech/OCR/media tools, links CLI and MCP launchers in `~/.local/bin`, and registers this checkout's **local** Codex marketplace if Codex CLI is present. Keep the checkout and start a new chat. For another MCP client use `./media-lens install --no-codex`. Run `./media-lens doctor --fix --local` to rebuild and restore missing launchers. It does not overwrite other installations.
+
+| What you want | What else you need |
+|---|---|
+| Recognize a link; read existing task evidence in this installation | No acquisition service. Docker jobs live in a named volume. |
+| Analyze a new Douyin or Bilibili work; query Douyin creator uploads | Evil0ctal v5, a scoped reader key and a usable guest for the platform. A self-hosted deployment includes PostgreSQL, Redis and workers. |
+| Browse public Bilibili creator/collection metadata | Public endpoints; the platform may restrict results. |
+| **Experimental** Xiaohongshu | A guest-readable original share, no Evil0ctal or account. Stops at login; live positive frame acceptance is pending. |
+
+Already have a reader? Supply `EVIL0CTAL_ENDPOINT` (trusted HTTPS origin) and `EVIL0CTAL_API_KEY` to the CLI/MCP process. To self-host, run `./media-lens install --provider` (bootstrap also needs Git and Python 3), then follow the [owner, guest and key setup](docs/providers/douyin.md). Check `./media-lens doctor --platform douyin` or `bilibili`. Initial build/model downloads need network access. [Native developer install](docs/development/setup.md).
 
 ## Providers and configuration
 

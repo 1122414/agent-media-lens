@@ -33,15 +33,38 @@ function service() {
   return new Lens(config());
 }
 const provider = z.enum(["evil0ctal", "native"]).optional();
+function repairNative() {
+  const setup = join(projectRoot, "scripts", "init-native.sh");
+  if (!existsSync(setup))
+    throw new LensError(
+      "INSTALL",
+      "请在宿主机的项目目录运行 ./media-lens install",
+    );
+  try {
+    execFileSync("sh", [setup], { stdio: ["inherit", 2, 2] });
+  } catch {
+    throw new LensError(
+      "INSTALL",
+      "本机初始化未完成；请检查上述依赖，或使用 ./media-lens install 安装 Docker 运行时",
+    );
+  }
+}
+cli
+  .command("install")
+  .description("初始化本机源码运行时；免宿主依赖请用 ./media-lens install")
+  .action(repairNative);
 cli.command("config").action(() => show(config()));
 cli
   .command("doctor")
+  .option("--local", "仅检查本地媒体工具和 OCR 语言，不连接采集服务")
+  .option("--fix", "修复当前安装的运行时与启动器，再执行检查")
   .option(
     "--platform <name>",
     "检查 douyin / bilibili 的服务配置，或 xiaohongshu 的本地处理环境",
     "douyin",
   )
   .action(async (opts) => {
+    if (opts.fix) repairNative();
     const platform = z
       .enum(["douyin", "bilibili", "xiaohongshu"])
       .parse(opts.platform);
@@ -70,20 +93,38 @@ cli
         versions[key] = null;
       }
     }
+    let missingOcrLanguages = c.ocrLang.split("+");
+    try {
+      const languages = execFileSync("tesseract", ["--list-langs"], {
+        encoding: "utf8",
+        timeout: 5000,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).split(/\s+/);
+      missingOcrLanguages = missingOcrLanguages.filter(
+        (lang) => !languages.includes(lang),
+      );
+    } catch {
+      /* unavailable OCR is also listed in versions */
+    }
     const providerCheck =
-      platform !== "xiaohongshu" && c.provider === "evil0ctal"
+      !opts.local && platform !== "xiaohongshu" && c.provider === "evil0ctal"
         ? await inspectEvil(c, fetch, platform)
         : null;
     show({
       node: process.version,
       versions,
+      missingOcrLanguages,
+      ...(opts.local ? { check: "local-runtime-only" } : {}),
       providerReady: providerCheck?.serviceReady ?? null,
       providerCheck,
       ...(platform === "xiaohongshu"
         ? { accessMode: "native-guest", noteAccess: "untested" }
-        : { hasProviderKey: Boolean(providerKey(c)) }),
+        : opts.local
+          ? {}
+          : { hasProviderKey: Boolean(providerKey(c)) }),
     });
     if (
+      missingOcrLanguages.length > 0 ||
       Object.values(versions).includes(null) ||
       (providerCheck !== null && providerCheck.code !== "OK")
     )

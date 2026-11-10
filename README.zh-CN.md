@@ -49,22 +49,27 @@ media-lens profile "$PROFILE_URL" --local-login --view posts --count 3 --cursor 
 
 插件参数为 `auth: "local-login"`；不传时仍为访客。登录模式只用于作者投稿，不用于下载。用发布时间区分新作品与置顶作品，空标题表示平台没有提供标题。
 
-## 安装
+## 安装：macOS / Linux
 
-准备 Node 24（24.12+）或 26、pnpm 11.5、Python 3.12、uv、FFmpeg、ffprobe 和 Tesseract。OCR 需要 chi_sim 与 eng 语言包。第一次转写会按需下载模型，可提前准备缓存。
+启动 Docker（含 Compose v2 或更新版），用 Git 获取源码，或解压 Release 源码。检测到 Codex CLI 时，安装器会自动注册本地插件。宿主机不需要另装 Node、pnpm、Python、FFmpeg 或 Tesseract。
 
 ```sh
-git clone https://github.com/1122414/agent-media-lens.git
+git clone --branch v0.5.0 https://github.com/1122414/agent-media-lens.git
 cd agent-media-lens
-pnpm install --frozen-lockfile
-uv sync --frozen --python 3.12
-pnpm build
-sh scripts/install-launchers.sh
-export PATH="$HOME/.local/bin:$PATH"
-media-lens doctor
+./media-lens install
+./media-lens doctor --local
 ```
 
-按[采集服务说明](docs/providers/douyin.md)启动独立的 Evil0ctal v5，给本地进程设置 EVIL0CTAL_ENDPOINT 和 EVIL0CTAL_API_KEY。如果 Evil0ctal 不可达、密钥缺失或无权限，或抖音身份池没有可调度身份，doctor 返回退出码 1。检查通过只说明本机配置可用，具体作品仍要检查访客能否读取详情和媒体。可先运行 identify 识别分享链接。
+安装器构建镜像，检查媒体工具、ASR 和 OCR 语言，把 CLI 和 MCP 启动器放入 `~/.local/bin`。保留源码目录，在 Codex 中开启新对话。其他 Agent 可用 `./media-lens install --no-codex`。运行 `./media-lens doctor --fix --local` 可重建运行时、补回缺失的启动器，不覆盖其他安装。
+
+| 你想做什么 | 还需要什么 |
+|---|---|
+| 识别链接；读本次安装已有任务的画面、口播和报告 | 不需要采集服务。Docker 任务存储在独立的命名卷。 |
+| 分析新抖音、B 站作品；查询抖音作者投稿 | 另需 Evil0ctal v5、对应平台只读密钥和可用访客。自建服务包含 PostgreSQL、Redis 和 Worker。 |
+| 查询 B 站公开主页、合集目录 | 走 B 站公开接口，平台可能限制返回范围。 |
+| **Experimental / 实验性** 小红书 | 需要访客能读取的原始分享，不用账号或 Evil0ctal。遇登录即停止，正向真机取帧仍待验证。 |
+
+已有服务：向 CLI/MCP 进程配置可信 HTTPS 的 `EVIL0CTAL_ENDPOINT` 和 `EVIL0CTAL_API_KEY`。要自建：运行 `./media-lens install --provider`（此引导脚本另需 Git、Python 3），按[采集服务说明](docs/providers/douyin.md)完成所有者设置、导入访客、签发只读密钥。用 `./media-lens doctor --platform douyin` 或 `bilibili` 单独验收。首次构建和模型下载需要网络。[非 Docker 的开发者安装](docs/development/setup.md)。
 
 ## CLI、插件与容器
 

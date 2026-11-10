@@ -1,13 +1,18 @@
 {
   "mcpServers": {
     "agent-media-lens": {
-      "command": "media-lens-mcp",
+      "command": "sh",
       "env_vars": [
         "MEDIA_LENS_CONFIG",
         "MEDIA_LENS_CACHE",
         "MEDIA_LENS_PYTHON",
         "EVIL0CTAL_ENDPOINT",
-        "EVIL0CTAL_API_KEY"
+        "EVIL0CTAL_API_KEY",
+        "LENS_PROVIDER_CONTAINER"
+      ],
+      "args": [
+        "-c",
+        "if command -v media-lens-mcp >/dev/null 2>&1; then exec media-lens-mcp; else exec \"$HOME/.local/bin/media-lens-mcp\"; fi"
       ]
     }
   }

@@ -18,4 +18,4 @@ The same [recognition evidence](patterns/recognition-evidence.md) records a movi
 
 [Xiaohongshu share recognition versus content access](patterns/xhs-share-gates.md) applies when a note ID is known but the next request leads to login or an error page. Verified on live guest refusals; successful media decoding is fixture-tested only.
 
-[Final-image runtime checks](patterns/container-runtimes.md) cover a copied Node binary missing a shared library and the ASR worker interpreter location when the Python base changes. The Node startup failure was observed in CI.
+[Final-image runtime checks](patterns/container-runtimes.md) cover a copied Node binary missing a shared library and the ASR worker interpreter location when the Python base changes, and a working engine with only a standalone Compose binary. The Node startup failure was observed in CI.

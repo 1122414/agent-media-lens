@@ -1,0 +1,104 @@
+#!/bin/sh
+# Host entry point: only POSIX sh and Docker Compose are required at runtime.
+set -eu
+mode=${0##*/}
+script=$0
+while [ -L "$script" ]; do
+  dest=$(readlink "$script")
+  case "$dest" in /*) script=$dest ;; *) script=$(dirname "$script")/$dest ;; esac
+done
+root=$(CDPATH= cd -- "$(dirname -- "$script")" && pwd)
+bin=${MEDIA_LENS_BIN_DIR:-"$HOME/.local/bin"}
+fail() { echo "$*" >&2; exit 1; }
+command -v docker >/dev/null || fail 'Install Docker with Compose v2 and start the engine; no host Node or Python is required.'
+if docker compose version >/dev/null 2>&1; then
+  dc() { docker compose "$@"; }
+elif command -v docker-compose >/dev/null && docker-compose version --short | grep -Eq '^v?([2-9]|[1-9][0-9]+)\.'; then
+  dc() { docker-compose "$@"; }
+else fail 'Install modern Docker Compose (docker compose or docker-compose v2+).'; fi
+docker info >/dev/null 2>&1 || fail 'Docker is installed but the engine is unavailable. Start Docker Desktop or your Docker engine.'
+compose() { dc -f "$root/compose.yaml" "$@"; }
+runtime() {
+  case ${LENS_PROVIDER_CONTAINER:-} in '') compose "$@" ;; *)
+    dc -f "$root/compose.yaml" -f "$root/compose.local-provider.yaml" "$@" ;;
+  esac
+}
+provider_guide() {
+  cat <<'EOF'
+Douyin/Bilibili video analysis: use an existing reader service (HTTPS endpoint + read key),
+or run ./media-lens install --provider to start the pinned local service.
+Complete owner setup, provision a guest and platform read key in its loopback console;
+never paste keys into chat. See docs/providers/douyin.md. Then run:
+  media-lens doctor --platform douyin    # or bilibili
+Existing task reads and link identification do not need the provider.
+EOF
+}
+install_runtime() {
+  with_codex=yes; with_provider=no
+  for opt in "$@"; do
+    case "$opt" in --no-codex) with_codex=no ;; --provider) with_provider=yes ;; *) fail "Unknown install option: $opt" ;; esac
+  done
+  case "$bin" in /*) ;; *) fail 'MEDIA_LENS_BIN_DIR must be an absolute path.' ;; esac
+  for name in media-lens media-lens-mcp; do
+    p="$bin/$name"
+    if [ -e "$p" ] || [ -L "$p" ]; then
+      [ -L "$p" ] && [ "$(readlink "$p")" = "$root/media-lens" ] || fail "Existing launcher left unchanged: $p. Use a different MEDIA_LENS_BIN_DIR or use the native installation."
+    fi
+  done
+  compose build lens
+  compose run --rm --no-deps -T lens doctor --local
+  mkdir -p "$bin"
+  for name in media-lens media-lens-mcp; do
+    [ -L "$bin/$name" ] || ln -s "$root/media-lens" "$bin/$name"
+  done
+  if [ "$with_codex" = yes ]; then
+    if command -v codex >/dev/null; then
+      codex plugin marketplace add "$root"
+      codex plugin add agent-media-lens@agent-media-lens-local
+    else
+      echo 'Codex CLI not found. Runtime installed. In Codex CLI run:'
+      echo "  codex plugin marketplace add \"$root\""
+      echo '  codex plugin add agent-media-lens@agent-media-lens-local'
+    fi
+  fi
+  echo "CLI and stdio MCP installed in: $bin (keep this checkout)."
+  if [ "$bin" != "$HOME/.local/bin" ]; then echo 'Custom launcher directory: include it on the Codex process PATH.'; fi
+  if [ "$with_provider" = yes ]; then
+    command -v git >/dev/null && command -v python3 >/dev/null || fail 'Optional local provider bootstrap needs Git and Python 3.'
+    sh "$root/providers/douyin/bootstrap.sh"
+    DTK_IMAGE=evil0ctal/douyin_tiktok_download_api DTK_IMAGE_TAG=5.1.11 dc -f "$root/providers/douyin/compose.yaml" up --no-build -d --wait
+    echo 'Local provider started. Open http://127.0.0.1:8000 on this machine for owner/guest/key setup.'
+  fi
+  provider_guide
+}
+if [ "$mode" != media-lens-mcp ]; then
+  case ${1:-} in
+    install) shift; install_runtime "$@"; exit ;;
+    doctor)
+      # Rebuild pinned tools, restore missing launchers, then run the requested check.
+      fix=no
+      for arg in "$@"; do [ "$arg" != --fix ] || fix=yes; done
+      if [ "$fix" = yes ]; then
+        install_runtime --no-codex
+        shift
+        for arg in "$@"; do shift; [ "$arg" = --fix ] || set -- "$@" "$arg"; done
+        set -- doctor "$@"
+      fi ;;
+  esac
+fi
+# Join only our explicitly deployed local provider; don't redirect a remote reader key.
+if [ -z "${LENS_PROVIDER_CONTAINER:-}" ] && [ "${EVIL0CTAL_ENDPOINT:-http://127.0.0.1:8000}" = http://127.0.0.1:8000 ] && [ -e "$root/providers/douyin/.upstream/.env" ]; then
+  LENS_PROVIDER_CONTAINER=$(dc -f "$root/providers/douyin/compose.yaml" ps -q api)
+  export LENS_PROVIDER_CONTAINER
+fi
+if [ "$mode" = media-lens-mcp ]; then
+  set -- --entrypoint node lens dist/apps/mcp-server/main.js "$@"
+else
+  set -- lens "$@"
+fi
+if [ -n "${MEDIA_LENS_CONFIG:-}" ]; then
+  case "$MEDIA_LENS_CONFIG" in /*) ;; *) fail 'Use an absolute MEDIA_LENS_CONFIG path in Docker mode.' ;; esac
+  [ -f "$MEDIA_LENS_CONFIG" ] || fail 'MEDIA_LENS_CONFIG must point to an existing JSON file.'
+  set -- -v "$MEDIA_LENS_CONFIG:/run/lens-config.json:ro" -e MEDIA_LENS_CONFIG=/run/lens-config.json "$@"
+fi
+runtime run --rm --no-deps -T "$@"
