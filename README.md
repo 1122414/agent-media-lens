@@ -1,12 +1,21 @@
 # AgentMediaLens
 
-Give Codex a Douyin or Bilibili link. It can read the actual speech and frames, then write a Markdown report with timestamps you can check.
+Give Codex or another MCP agent a public Douyin or Bilibili link. With a configured guest reader, the agent can inspect video frames and read timestamped speech without opening a browser. It uses keyframes for an overview. Ask about a specific second and it retrieves the frame displayed at that instant, the surrounding transcript and, on request, a short clip of the original audio.
 
-[Install](#install-on-macos-or-linux) · [v0.5.0 release](https://github.com/1122414/agent-media-lens/releases/tag/v0.5.0) · [简体中文](README.zh-CN.md) · [Architecture](docs/architecture/overview.md)
+[Install](#install-on-macos-or-linux) · [v0.6.0 release](https://github.com/1122414/agent-media-lens/releases/tag/v0.6.0) · [简体中文](README.zh-CN.md) · [Architecture](docs/architecture/overview.md)
+
+## Ask about a specific second
+
+| Try this follow-up | What the agent could verify |
+|---|---|
+| “How many stars are on screen at 00:32?” | The star beside Mika reads **4,898**. The surrounding speech transcript says “almost five thousand stars.” [Bilibili video at 00:32](https://www.bilibili.com/video/BV1Q34P6vEzR/?t=32) |
+| “Which page is open at 00:43?” | The Douyin tutorial shows the **password-change page** headed “安全” (Security), with three password fields and a blue “下一步” (Next) button. The on-screen caption explains when to change the password. Voice activity detection found no speech in the 00:41–00:45 audio clip. [Douyin tutorial](https://www.douyin.com/video/7422312100527148322) |
+
+Across three public links and five fixed timestamps, the nearest keyframe matched the reference image at three points. The new `media_get_moment` tool matched all five on the same completed tasks. If the original has been cleared, the link must still be readable by the guest service. [Test results](docs/development/2026-11-18_on-demand-moments.md)
 
 ![80-second edited replay of a real Codex session: link → transcript → JPEG → cited report → Bilibili creator comparison](docs/demo/walkthrough.gif)
 
-[Download the 80-second MP4](https://github.com/1122414/agent-media-lens/releases/download/v0.5.0/walkthrough.mp4) · [Read the demo and evidence](docs/demo/README.md)
+[Download the 80-second MP4](https://github.com/1122414/agent-media-lens/releases/download/v0.6.0/walkthrough.mp4) · [Read the demo and evidence](docs/demo/README.md)
 
 **Before installing:** the Docker runtime needs no host media tools. New Douyin/Bilibili analyses need a separately configured guest reader. The Codex plugin installs from this repository's **local marketplace**; an OpenAI official-directory listing has not been verified. **Xiaohongshu — Experimental:** guest-only, stops at login, positive live frame acceptance still pending. [Scope](docs/providers/xiaohongshu.md).
 
@@ -17,7 +26,6 @@ Share a supported public link; there is no required genre or creative brief. If 
 | Try asking the plugin | Output |
 |---|---|
 | “Analyze this work: [link].” | Evidence-cited analysis of editing, content, viewpoint and possible audience. No creative brief required. |
-| “What number is on screen at 32 seconds, and what does the speaker say?” | The agent retrieves the displayed frame, timed speech context and voice activity on demand, with an optional four-second audio excerpt. |
 | “Compare this creator’s high-like and ordinary posts. I want to make something similar.” | A scoped comparison plus two or three original directions, with material requirements and a first shot for each. |
 | “Use this as a reference for a 60-second software explainer; I only have screen recordings.” | A separate production plan: title, cover, two openings and a timed shot list with visuals, lines/audio, captions and edits. |
 
@@ -32,7 +40,7 @@ Run `media-lens profile "$PROFILE_URL" --count 5` for either platform, or call `
 Start Docker with Compose v2+ and have Git available (or extract the release source). Codex CLI is needed for automatic plugin registration. This path does not require host Node, pnpm, Python, FFmpeg or Tesseract.
 
 ```sh
-git clone --branch v0.5.0 https://github.com/1122414/agent-media-lens.git
+git clone --branch v0.6.0 https://github.com/1122414/agent-media-lens.git
 cd agent-media-lens
 ./media-lens install
 ./media-lens doctor --local

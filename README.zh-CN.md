@@ -1,12 +1,21 @@
 # AgentMediaLens
 
-把抖音或 B 站链接发给 Codex。它可以读真实口播和画面，再把带帧号和时间戳的分析写成 Markdown，方便你核对。
+把公开的抖音或 B 站链接发给 Codex 或其他支持 MCP 的 Agent。配置好访客读取服务后，Agent 不开浏览器就能看视频画面、读带时间戳的口播。概览时看关键帧。追问具体某一秒时，它会取出那一刻实际显示的画面和附近的转写，需要时还可以取一小段原声。
 
-[安装](#install) · [v0.5.0 发布页](https://github.com/1122414/agent-media-lens/releases/tag/v0.5.0) · [English](README.md) · [架构](ARCHITECTURE.md)
+[安装](#install) · [v0.6.0 发布页](https://github.com/1122414/agent-media-lens/releases/tag/v0.6.0) · [English](README.md) · [架构](ARCHITECTURE.md)
+
+## 追问视频里的某一秒
+
+| 在同一对话里追问 | Agent 实际读到的内容 |
+|---|---|
+| “第 32 秒，屏幕上到底是多少颗星？” | Mika 下方的星标旁写着 **4,898**。同期口播转写说的是「快五千顆星」，精确数字来自画面。[B 站原视频 · 00:32](https://www.bilibili.com/video/BV1Q34P6vEzR/?t=32) |
+| “第 43 秒，教程打开的是哪个页面？” | 画面是**改密码页**，标题为「安全」，有三个密码输入框和蓝色「下一步」按钮。底部字幕解释何时需要改密码。41–45 秒的原声没有检出语音活动。[抖音原视频](https://www.douyin.com/video/7422312100527148322) |
+
+用三条公开链接、五个固定时间点复测，按最近关键帧查询命中 3/5。在同一批已完成的任务上调用精确取帧工具 `media_get_moment`，五处都取到了目标画面。原片已清理时，插件会重新读取链接，前提是访客届时仍能访问。[五个时间点的复测记录](docs/development/2026-11-18_on-demand-moments.md)
 
 ![80 秒实跑回放：从抖音链接到口播、JPEG 和报告，再到 B 站创作者对比](docs/demo/walkthrough.gif)
 
-[下载 80 秒 MP4](https://github.com/1122414/agent-media-lens/releases/download/v0.5.0/walkthrough.mp4) · [演示步骤及证据](docs/demo/README.md)
+[下载 80 秒 MP4](https://github.com/1122414/agent-media-lens/releases/download/v0.6.0/walkthrough.mp4) · [演示步骤及证据](docs/demo/README.md)
 
 **安装前先看：** Docker 运行时不要求宿主机装媒体工具。分析新抖音、B 站作品仍需另配访客采集服务。插件支持从本仓库的 **Codex 本地 Marketplace** 安装，尚未确认被 OpenAI 官方目录收录。**小红书 — Experimental / 实验性**：只走访客公开页，遇登录即停；真实成功取帧仍待验证。[支持范围](docs/providers/xiaohongshu.md)。
 
@@ -17,7 +26,6 @@
 | 可以这样说 | 实际得到什么 |
 |---|---|
 | “分析这条作品：[链接]” | 一份引用画面、图文页或口播的分析，区分能观察到的剪辑、内容、观点与对受众的推测。 |
-| “第 32 秒屏幕上的数字是多少？讲解说了什么？” | Agent 按需读取该秒实际显示的画面、同期转写和语音活动，也可取前后各两秒的原声。 |
 | “对比这个作者的高赞作品和普通作品，我也想做一条。” | 同一作者、同一形式的样本与有证据的差异，再给 2–3 个原创方向、需要的素材和各自的第一镜。 |
 | “参考这条教程，我想做一条 60 秒 AI 口播，只能录屏、不露脸。” | 分析之外，单独交付标题、封面、两个开头和按秒分镜，具体到画面、台词、声音、字幕与剪辑。 |
 
@@ -52,7 +60,7 @@ media-lens profile "$PROFILE_URL" --local-login --view posts --count 3 --cursor 
 启动 Docker（含 Compose v2 或更新版），用 Git 获取源码，或解压 Release 源码。检测到 Codex CLI 时，安装器会自动注册本地插件。宿主机不需要另装 Node、pnpm、Python、FFmpeg 或 Tesseract。
 
 ```sh
-git clone --branch v0.5.0 https://github.com/1122414/agent-media-lens.git
+git clone --branch v0.6.0 https://github.com/1122414/agent-media-lens.git
 cd agent-media-lens
 ./media-lens install
 ./media-lens doctor --local

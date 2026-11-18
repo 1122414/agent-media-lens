@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.0 · 2026-11-18
+
+- Ask a browser-free MCP agent about a specific second of a public Douyin or Bilibili video. On a completed task, `media_get_moment` returns the displayed frame, its presentation timestamp, surrounding transcript and voice activity. An optional WAV contains up to four seconds of original audio.
+- In the five-timestamp replay, all five on-demand frames matched the reference. At 32 seconds the Bilibili frame showed **4,898** stars. At 43 seconds the Douyin tutorial showed the **password-change page**. [Release notes](docs/releases/v0.6.0.md) · [Test results](docs/development/2026-11-18_on-demand-moments.md)
+
 ## v0.5.0 · 2026-11-10
 
 - Initialize the CLI, stdio MCP runtime and local Codex marketplace from one Docker command. Check media dependencies without a provider, and repair the runtime and missing launchers.
