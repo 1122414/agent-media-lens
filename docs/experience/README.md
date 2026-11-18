@@ -1,5 +1,7 @@
 # Engineering experience
 
+[Comparing share-link acquisition](patterns/media-acquisition-comparisons.md) records the maintainer's product scope and a documented case where the provider itself offers a competing Codex download path.
+
 [Passing decoded audio into ASR](patterns/asr-pcm.md) applies when FFmpeg succeeds but transcription fails opening the WAV. Verified with English and Mandarin clips on the same locked stack.
 
 [Separating recognition from visual evidence](patterns/recognition-evidence.md) applies when a missing model hides usable frames, confidence conflicts with the visible image, or change-driven sampling misses the close. Verified with offline model isolation and three video samples; a [paired Mandarin evaluation](../development/2026-11-10_mandarin-asr-comparison.md) compares isolated clips with full-recording time citations on one accented source, not dialect-wide accuracy.
