@@ -1,6 +1,6 @@
 # Engineering experience
 
-[Comparing how agents inspect shared videos](patterns/media-acquisition-comparisons.md) covers the path from a platform link to an image and timed transcript in the conversation, including the guest-access requirements.
+[Comparing how agents inspect shared videos](patterns/media-acquisition-comparisons.md) covers image delivery to the agent, per-platform evidence, and the distinction between a user-operated player and a headless browser. Includes published API, Skill and acceptance examples.
 
 [Passing decoded audio into ASR](patterns/asr-pcm.md) applies when FFmpeg succeeds but transcription fails opening the WAV. Verified with English and Mandarin clips on the same locked stack.
 
