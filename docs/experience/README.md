@@ -2,6 +2,8 @@
 
 [Comparing how agents inspect shared videos](patterns/media-acquisition-comparisons.md) covers image delivery and checking the returned frame time against independent source frames. A [three-link benchmark](../development/2026-11-18_agent-video-comparison.md) exercises two native evidence workflows and a supplemental exact seek. BibiGPT access stopped at authentication.
 
+The [local BiliNote benchmark](../development/2026-11-18_bilinote-local-comparison.md) applies when source frames exist internally or a generated note mentions a timestamp. Two explicit time markers in a new note produced verifiable screenshots over HTTP. Compare those files with the chat reply and original timed speech separately.
+
 [Passing decoded audio into ASR](patterns/asr-pcm.md) applies when FFmpeg succeeds but transcription fails opening the WAV. Verified with English and Mandarin clips on the same locked stack.
 
 [Separating recognition from visual evidence](patterns/recognition-evidence.md) applies when a missing model hides usable frames, confidence conflicts with the visible image, or change-driven sampling misses the close. Verified with offline model isolation and three video samples; a [paired Mandarin evaluation](../development/2026-11-10_mandarin-asr-comparison.md) compares isolated clips with full-recording time citations on one accented source, not dialect-wide accuracy.
