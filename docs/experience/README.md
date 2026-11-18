@@ -1,6 +1,6 @@
 # Engineering experience
 
-[Comparing share-link acquisition](patterns/media-acquisition-comparisons.md) records the maintainer's product scope and a documented case where the provider itself offers a competing Codex download path.
+[Comparing how agents inspect shared videos](patterns/media-acquisition-comparisons.md) covers the path from a platform link to an image and timed transcript in the conversation, including the guest-access requirements.
 
 [Passing decoded audio into ASR](patterns/asr-pcm.md) applies when FFmpeg succeeds but transcription fails opening the WAV. Verified with English and Mandarin clips on the same locked stack.
 
