@@ -4,7 +4,7 @@ Run pnpm build, pnpm lint, pnpm test, uv run ruff check workers scripts tests, u
 
 For voiced-model quality comparisons, see the [Mandarin CPU experiment and local evaluation recipe](2026-11-10_mandarin-asr-comparison.md). The model weights and reference media are not required for CI.
 
-Tests that start FFmpeg, Tesseract and the real Python worker use a per-case timeout (20–30 seconds). The five-second unit-test default interrupted a mixed-album run on a shared [Linux runner](https://github.com/1122414/agent-media-lens/actions/runs/42589627084/job/129067785112); the frame, OCR, page, byte-budget and cleanup assertions remain mandatory.
+Tests that start FFmpeg, Tesseract and the real Python worker use a per-case timeout (20–30 seconds). The five-second unit-test default interrupted a mixed-album run on a shared [Linux runner](https://github.com/1122414/agent-media-lens/actions/runs/42589627084/job/129067785112); the frame, OCR, page, byte-budget and cleanup assertions remain mandatory. The Node matrix runs Vitest with `--maxWorkers=1` so files that launch media and CLI subprocesses run in sequence on each runner. In a [parallel Node 26 run](https://github.com/1122414/agent-media-lens/actions/runs/44253234552/job/134628707466), the service, Xiaohongshu, MCP and CLI configuration tests all exceeded their individual time limits.
 
 Provider fixtures cover URL validation, explicit public/download permission, v5 task polling and image album rejection. The generated FFmpeg clip tests exercise real decoding, frames, OCR, task storage, MCP image bytes and CLI reads without a provider identity. The suite injects a fixture at the acquisition boundary.
 
