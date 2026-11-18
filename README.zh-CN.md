@@ -2,7 +2,7 @@
 
 把公开的抖音或 B 站链接发给 Codex 或其他支持 MCP 的 Agent。配置好访客读取服务后，Agent 不开浏览器就能看视频画面、读带时间戳的口播。概览时看关键帧。追问具体某一秒时，它会取出那一刻实际显示的画面和附近的转写，需要时还可以取一小段原声。
 
-[安装](#install) · [v0.6.0 发布页](https://github.com/1122414/agent-media-lens/releases/tag/v0.6.0) · [English](README.md) · [架构](ARCHITECTURE.md)
+[让 Agent 帮你安装](#让-agent-帮你安装) · [手动安装](#在终端手动安装) · [v0.6.0 发布页](https://github.com/1122414/agent-media-lens/releases/tag/v0.6.0) · [English](README.md) · [架构](ARCHITECTURE.md)
 
 ## 追问视频里的某一秒
 
@@ -56,6 +56,22 @@ media-lens profile "$PROFILE_URL" --local-login --view posts --count 3 --cursor 
 <a id="install"></a>
 
 ## 安装：macOS / Linux
+
+### 让 Agent 帮你安装
+
+把下面这段话复制给 Codex，或其他能在你电脑上执行终端命令的 MCP Agent。
+
+```text
+请从 https://github.com/1122414/agent-media-lens 安装 v0.6.0 版 AgentMediaLens。
+先检查 Docker 已启动且 Compose 为 v2 或更新版。把这个标签的源码克隆到可以长期保留的目录，然后进入该目录。
+如果你是 Codex，确认本机有 Codex CLI，执行 ./media-lens install，再用 codex plugin list --marketplace agent-media-lens-local --json 确认插件已安装。
+如果你是其他 MCP 客户端，执行 ./media-lens install --no-codex，再把安装好的 media-lens-mcp 启动器的绝对路径配置为当前客户端的 stdio 服务命令。
+执行 ./media-lens doctor --local。若已配置访客读取服务，再分别执行 ./media-lens doctor --platform douyin 和 ./media-lens doctor --platform bilibili。告诉我哪些检查通过了，还有什么需要配置。
+```
+
+安装后开一个新对话，问“你能看到 `media_get_moment` 工具吗？”访客读取服务配置好后，就可以贴一条公开视频链接，问“第 32 秒屏幕上是什么？”
+
+### 在终端手动安装
 
 启动 Docker（含 Compose v2 或更新版），用 Git 获取源码，或解压 Release 源码。检测到 Codex CLI 时，安装器会自动注册本地插件。宿主机不需要另装 Node、pnpm、Python、FFmpeg 或 Tesseract。
 

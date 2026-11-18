@@ -2,7 +2,7 @@
 
 Give Codex or another MCP agent a public Douyin or Bilibili link. With a configured guest reader, the agent can inspect video frames and read timestamped speech without opening a browser. It uses keyframes for an overview. Ask about a specific second and it retrieves the frame displayed at that instant, the surrounding transcript and, on request, a short clip of the original audio.
 
-[Install](#install-on-macos-or-linux) · [v0.6.0 release](https://github.com/1122414/agent-media-lens/releases/tag/v0.6.0) · [简体中文](README.zh-CN.md) · [Architecture](docs/architecture/overview.md)
+[Ask your agent to install](#ask-your-agent-to-install) · [Manual install](#install-from-a-terminal) · [v0.6.0 release](https://github.com/1122414/agent-media-lens/releases/tag/v0.6.0) · [简体中文](README.zh-CN.md) · [Architecture](docs/architecture/overview.md)
 
 ## Ask about a specific second
 
@@ -36,6 +36,22 @@ Preview the metadata selection with `media-lens compare "$PROFILE_URL" --sample-
 Run `media-lens profile "$PROFILE_URL" --count 5` for either platform, or call `media_list_profile` from the plugin. It returns canonical links, titles, upload times, duration and the available engagement counts without opening a browser. Use the returned view and cursor to continue. A collection has a separate scope from all uploads. [Profile contract](docs/architecture/data-contracts.md). For opt-in, browser-free Douyin upload queries with a locally reserved login, see [setup and revocation](docs/providers/douyin.md#optional-local-login-for-public-uploads).
 
 ## Install on macOS or Linux
+
+### Ask your agent to install
+
+Paste this into Codex or another MCP agent that can run terminal commands on your machine.
+
+```text
+Install AgentMediaLens for me from https://github.com/1122414/agent-media-lens at tag v0.6.0.
+Check that Docker is running with Compose v2+. Clone the tag into a directory I can keep, then work from that directory.
+For Codex, check that the Codex CLI is available, run ./media-lens install, and confirm the plugin is installed with codex plugin list --marketplace agent-media-lens-local --json.
+For another MCP client, run ./media-lens install --no-codex and register the absolute path to the installed media-lens-mcp launcher as this client’s stdio server command.
+Run ./media-lens doctor --local. If a guest reader is configured, also run ./media-lens doctor --platform douyin and ./media-lens doctor --platform bilibili. Tell me which checks passed and what setup is still needed.
+```
+
+Open a new chat after installation and ask “Do you see the `media_get_moment` tool?” Once the guest reader is configured, paste a public video link and ask “What’s on screen at 00:32?”
+
+### Install from a terminal
 
 Start Docker with Compose v2+ and have Git available (or extract the release source). Codex CLI is needed for automatic plugin registration. This path does not require host Node, pnpm, Python, FFmpeg or Tesseract.
 
