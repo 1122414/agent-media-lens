@@ -243,14 +243,37 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       expect(
         Buffer.from(content.data, "base64").subarray(0, 2).toString("hex"),
       ).toBe("ffd8");
-    const label = (res: typeof result) => {
+    const label = (res: typeof result, withAudio = false) => {
       expect(res.isError).toBeFalsy();
-      expect(res.content.map((c) => c.type)).toEqual(["image", "text"]);
+      expect(res.content.map((c) => c.type)).toEqual(
+        withAudio ? ["image", "text", "audio"] : ["image", "text"],
+      );
       const block = res.content[1];
       if (block.type !== "text") throw Error("no frame label");
       return JSON.parse(block.text);
     };
     expect(label(result)).toEqual({ id: "f000", timestamp: 0 });
+    const moment = await call("media_get_moment", {
+      ...a,
+      timestamp: 0.85,
+      includeAudio: true,
+    });
+    expect(label(moment, true)).toMatchObject({
+      requestedTimestamp: 0.85,
+      frameTimestamp: 0.8,
+      source: "retained",
+      speech: {
+        activityAtTimestamp: "not_detected",
+        transcriptStatus: "unavailable",
+        start: 0,
+        end: 2,
+      },
+    });
+    const clip = moment.content[2];
+    if (clip.type === "audio") {
+      expect(clip.mimeType).toBe("audio/wav");
+      expect(Buffer.from(clip.data, "base64").length).toBe(44 + 16000 * 2 * 2);
+    }
     // The platform says 1.5s; the decoded clip is 2s. Its last sample is at 1s.
     for (const timestamp of [0.8, 2]) {
       const actual = await call("media_get_frame", { ...a, timestamp });
@@ -259,6 +282,7 @@ it("invokes the installed server entry point, reads JPEG content and saves cited
       expect(actual.content[0]).toEqual(byId.content[0]);
     }
     for (const [name, args, code] of [
+      ["media_get_moment", { timestamp: 2 }, "INVALID_SELECTOR"],
       ["media_get_frame", { timestamp: 2.001 }, "INVALID_SELECTOR"],
       ["media_get_frame", { timestamp: 99999 }, "INVALID_SELECTOR"],
       ["media_get_frame", { page: 2 }, "PAGE_NOT_APPLICABLE"],

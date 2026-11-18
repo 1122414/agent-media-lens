@@ -103,6 +103,9 @@ it("processes mixed pages with local timestamps, a shared byte limit and transie
     expect(remaining[2]).toBeLessThan(remaining[1]);
     expect(remaining[1]).toBeLessThan(c.maxBytes);
     const r = lens.result(task.taskId);
+    await expect(lens.moment(task.taskId, 0)).rejects.toMatchObject({
+      code: "UNSUPPORTED_MEDIA",
+    });
     expect(r.duration).toBeNull();
     expect(r.schemaVersion).toBe("1.1");
     expect(r.frames.map((f) => f.page)).toEqual([1, 2, 2, 2]);

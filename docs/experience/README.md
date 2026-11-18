@@ -1,6 +1,6 @@
 # Engineering experience
 
-[Comparing how agents inspect shared videos](patterns/media-acquisition-comparisons.md) covers image delivery and checking the returned frame time against independent source frames. A [three-link benchmark](../development/2026-11-18_agent-video-comparison.md) exercises two native evidence workflows and a supplemental exact seek. BibiGPT access stopped at authentication.
+[Comparing how agents inspect shared videos](patterns/media-acquisition-comparisons.md) covers image delivery and checking the returned frame time against independent source frames. A [three-link benchmark](../development/2026-11-18_agent-video-comparison.md) exercises two native evidence workflows and a supplemental exact seek. BibiGPT access stopped at authentication. The [on-demand follow-up](../development/2026-11-18_on-demand-moments.md) verified five exact frames and separate audio windows, with fixture regressions for reordered video frames and delayed audio.
 
 The [local BiliNote benchmark](../development/2026-11-18_bilinote-local-comparison.md) applies when source frames exist internally or a generated note mentions a timestamp. Two explicit time markers in a new note produced verifiable screenshots over HTTP. Compare those files with the chat reply and original timed speech separately.
 

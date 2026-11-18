@@ -227,7 +227,7 @@ server.registerTool(
   "media_get_frame",
   {
     description:
-      "Read a JPEG by frameId or nearest in-range timestamp, followed by its actual frame ID, sample time and album page when applicable. Use page only on albums.",
+      "Read a JPEG by frameId or nearest in-range timestamp, followed by its actual frame ID, sample time and album page when applicable. Use page only on albums. For a specific video second use media_get_moment.",
     inputSchema: z.object({
       taskId,
       page,
@@ -242,6 +242,30 @@ server.registerTool(
     call("get_frame", () => {
       const { image, label } = lens.frameImage(a.taskId, a);
       return { content: [image, ...json(label).content] };
+    }),
+);
+server.registerTool(
+  "media_get_moment",
+  {
+    description:
+      "For a specific second of a completed video, decode the actual displayed frame and check nearby speech. Returns JPEG, frame presentation time, speech activity at the requested time, and timed ASR context within ±2s. Segment text can span silence. Set includeAudio for the actual WAV excerpt. May refetch publicly accessible media when the task kept no video.",
+    inputSchema: z.object({
+      taskId,
+      timestamp: z.number().nonnegative(),
+      includeAudio: z.boolean().default(false),
+    }),
+  },
+  (a, ctx) =>
+    call("get_moment", async () => {
+      const { image, label, audio } = await lens.moment(
+        a.taskId,
+        a.timestamp,
+        a.includeAudio,
+        ctx.mcpReq.signal,
+      );
+      return {
+        content: [image, ...json(label).content, ...(audio ? [audio] : [])],
+      };
     }),
 );
 server.registerTool(

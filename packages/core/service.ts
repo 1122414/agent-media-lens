@@ -2,6 +2,7 @@ import {
   readFileSync,
   writeFileSync,
   statSync,
+  linkSync,
   rmSync,
   renameSync,
 } from "node:fs";
@@ -26,7 +27,7 @@ import {
   type AssetKind,
 } from "./network.js";
 import { resolveMedia } from "./providers.js";
-import { worker } from "./processing.js";
+import { decodeMoment, worker } from "./processing.js";
 import { Store } from "./storage.js";
 const options = z
   .strictObject({
@@ -134,7 +135,7 @@ export class Lens {
           () => this.markRetry(id),
         );
         controller.signal.throwIfAborted();
-        const { media, stream, provider, slides } = candidate;
+        const { media, provider, slides } = candidate;
         album = Boolean(slides);
         trace({
           event: "rendition",
@@ -189,39 +190,14 @@ export class Lens {
             }
           }
         } else {
-          if (!stream)
-            throw new LensError(
-              "MEDIA_WITHHELD",
-              "作品详情可读，但访客未获得可用媒体",
-            );
           this.store.stage(id, "DOWNLOADING");
-          const path = this.store.file(id, inputName);
-          if (
-            media.platform === "douyin" &&
-            provider === "evil0ctal" &&
-            media.rendition
-          ) {
-            await this.transferDouyinVideo(
-              id,
-              candidate,
-              path,
-              c,
-              controller.signal,
-            );
-          } else {
-            await this.transfer(
-              id,
-              stream,
-              path,
-              c.maxBytes,
-              controller.signal,
-              media.platform === "xiaohongshu"
-                ? "xhs-stream"
-                : media.platform === "bilibili"
-                  ? "bili-stream"
-                  : "stream",
-            );
-          }
+          await this.transferVideo(
+            id,
+            candidate,
+            this.store.file(id, inputName),
+            c,
+            controller.signal,
+          );
         }
         const evidence = await this.io.worker(
           this.store.dir(id),
@@ -335,6 +311,38 @@ export class Lens {
       return this.store.task(id);
     })();
     return { taskId: id, done };
+  }
+  private async transferVideo(
+    id: string,
+    candidate: Candidate & { provider: string },
+    path: string,
+    c: Config,
+    signal: AbortSignal,
+  ) {
+    const { media, stream, provider } = candidate;
+    if (!stream)
+      throw new LensError(
+        "MEDIA_WITHHELD",
+        "作品详情可读，但访客未获得可用媒体",
+      );
+    if (
+      media.platform === "douyin" &&
+      provider === "evil0ctal" &&
+      media.rendition
+    )
+      return this.transferDouyinVideo(id, candidate, path, c, signal);
+    return this.transfer(
+      id,
+      stream,
+      path,
+      c.maxBytes,
+      signal,
+      media.platform === "xiaohongshu"
+        ? "xhs-stream"
+        : media.platform === "bilibili"
+          ? "bili-stream"
+          : "stream",
+    );
   }
   private async transferDouyinVideo(
     id: string,
@@ -499,6 +507,143 @@ export class Lens {
         offset + segments.length < all.length ? offset + segments.length : null,
     };
   }
+  async moment(
+    id: string,
+    timestamp: number,
+    includeAudio = false,
+    requestSignal?: AbortSignal,
+  ) {
+    const r = this.result(id);
+    if (r.media.kind === "image_album")
+      throw new LensError("UNSUPPORTED_MEDIA", "图集请按页读取已有帧");
+    const duration = r.fileDuration ?? r.duration;
+    if (
+      !Number.isFinite(timestamp) ||
+      timestamp < 0 ||
+      (duration != null && timestamp >= duration)
+    )
+      throw new LensError("INVALID_SELECTOR", "时间戳须从零开始并小于视频时长");
+    if (timestamp >= this.settings.maxSeconds)
+      throw durationLimit(timestamp, this.settings.maxSeconds);
+    return this.store.withMoment(async (scratch) => {
+      const controller = new AbortController();
+      this.active.set(scratch, controller);
+      const signal = requestSignal
+        ? AbortSignal.any([requestSignal, controller.signal])
+        : controller.signal;
+      try {
+        signal.throwIfAborted();
+        const path = this.store.file(scratch, ".playback.mp4");
+        const artifacts = this.store.task(id).artifacts ?? {};
+        const retained = artifacts.sourcePath ?? artifacts.playbackPath;
+        let linked = false;
+        if (retained) {
+          try {
+            linkSync(this.store.file(id, retained), path);
+            linked = true;
+          } catch (e) {
+            if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+          }
+        }
+        if (!linked) {
+          const candidate = await this.io.resolve(
+            this.settings,
+            r.media.sourceUrl,
+            r.provider === "native" || r.provider === "evil0ctal"
+              ? r.provider
+              : this.settings.provider,
+            signal,
+          );
+          if (
+            candidate.slides ||
+            candidate.media.platform !== r.media.platform ||
+            candidate.media.id !== r.media.id ||
+            (candidate.media.part?.number ?? 1) !==
+              (r.media.part?.number ?? 1) ||
+            (r.media.rendition &&
+              candidate.media.rendition !== r.media.rendition)
+          )
+            throw new LensError(
+              "MEDIA_CHANGED",
+              "重新读取的作品、分 P 或媒体版本已变化，请重新分析链接",
+            );
+          if (
+            candidate.media.duration !== null &&
+            candidate.media.duration > this.settings.maxSeconds
+          )
+            throw durationLimit(
+              candidate.media.duration,
+              this.settings.maxSeconds,
+            );
+          await this.transferVideo(
+            scratch,
+            candidate,
+            path,
+            this.settings,
+            signal,
+          );
+        }
+        const m = await decodeMoment(
+          this.store.dir(scratch),
+          timestamp,
+          this.settings.maxSeconds,
+          includeAudio,
+          signal,
+        );
+        if (
+          !linked &&
+          duration != null &&
+          Math.abs(m.duration - duration) > 0.05
+        )
+          throw new LensError(
+            "MEDIA_CHANGED",
+            "媒体时长已变化，请重新分析后再查询同期口播",
+          );
+        const start = m.speech.start ?? Math.max(0, timestamp - 2);
+        const end = m.speech.end ?? Math.min(m.duration, timestamp + 2);
+        const segments = r.transcript.segments
+          .filter(
+            (s) =>
+              s.end + m.transcriptOffset > start &&
+              s.start + m.transcriptOffset < end,
+          )
+          .map((s) => {
+            const begin = s.start + m.transcriptOffset,
+              finish = s.end + m.transcriptOffset;
+            return {
+              ...s,
+              start: begin,
+              end: finish,
+              coversTimestamp: begin <= timestamp && timestamp < finish,
+            };
+          });
+        const label = {
+          requestedTimestamp: timestamp,
+          frameTimestamp: m.timestamp,
+          source: linked ? "retained" : "refetched",
+          speech: {
+            ...m.speech,
+            transcriptStatus: r.transcript.status,
+            transcriptOffset: m.transcriptOffset,
+            contextSegments: segments,
+          },
+        };
+        const audio =
+          includeAudio && m.speech.start !== undefined
+            ? {
+                type: "audio" as const,
+                mimeType: "audio/wav",
+                data: readFileSync(
+                  this.store.file(scratch, "audio.wav"),
+                ).toString("base64"),
+              }
+            : undefined;
+        return { image: this.readImage(scratch, "f000.jpg"), label, audio };
+      } finally {
+        this.active.delete(scratch);
+      }
+    });
+  }
   image(id: string, selector: FrameSelector) {
     return this.frameImage(id, selector).image;
   }
@@ -539,19 +684,22 @@ export class Lens {
             undefined,
           );
     if (!frame) throw new LensError("NOT_FOUND", "关键帧不存在");
-    const path = this.store.file(id, frame.imagePath);
+    return {
+      label: { id: frame.id, page: frame.page, timestamp: frame.timestamp },
+      image: this.readImage(id, frame.imagePath),
+    };
+  }
+  private readImage(id: string, name: string) {
+    const path = this.store.file(id, name);
     if (statSync(path).size > 512000)
       throw new LensError("INVALID_IMAGE", "图片超限");
     const bytes = readFileSync(path);
     if (bytes.length > 512000 || bytes[0] !== 255 || bytes[1] !== 216)
       throw new LensError("INVALID_IMAGE", "图片格式或大小无效");
     return {
-      label: { id: frame.id, page: frame.page, timestamp: frame.timestamp },
-      image: {
-        type: "image" as const,
-        mimeType: "image/jpeg",
-        data: bytes.toString("base64"),
-      },
+      type: "image" as const,
+      mimeType: "image/jpeg",
+      data: bytes.toString("base64"),
     };
   }
 }

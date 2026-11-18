@@ -242,3 +242,100 @@ def test_hotword_phrases_use_alignment_only_when_it_preserves_all_text():
     segment.text = " first term later"
     words[-1].start = 0
     assert timed_phrases(segment, True) == [(0, 9, segment.text)]
+
+
+def test_exact_frame_across_variable_duration_cut(tmp_path: Path) -> None:
+    from moment import write_displayed_frame
+
+    path, image = tmp_path / "video.mp4", tmp_path / "view.jpg"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red:s=64x48:r=4:d=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=blue:s=64x48:r=4:d=1",
+            "-filter_complex",
+            "[0:v][1:v]concat=n=2:v=1:a=0,select='eq(n,0)+gte(n,4)'",
+            "-fps_mode",
+            "vfr",
+            "-c:v",
+            "mpeg4",
+            "-bf",
+            "2",
+            str(path),
+        ],
+        check=True,
+    )
+    for requested, expected, channel in [
+        (0, 0, 0),
+        (0.999, 0, 0),
+        (1, 1, 2),
+        (1.249, 1, 2),
+        (1.99, 1.75, 2),
+    ]:
+        assert write_displayed_frame(path, image, requested) == (expected, 0)
+        pixel = subprocess.check_output(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-i",
+                str(image),
+                "-vf",
+                "scale=1:1",
+                "-pix_fmt",
+                "rgb24",
+                "-f",
+                "rawvideo",
+                "-",
+            ]
+        )
+        assert pixel[channel] > 230 and pixel[2 - channel] < 20
+    with pytest.raises(ValueError, match="NO_FRAME_AT_TIME"):
+        write_displayed_frame(path, image, 2)
+
+
+def test_moment_audio_preserves_delayed_track(tmp_path: Path) -> None:
+    import numpy as np
+    from moment import audio_window, write_displayed_frame
+
+    path = tmp_path / "delayed.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red:s=64x48:r=4:d=5",
+            "-itsoffset",
+            "3",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=500:duration=2",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+            str(path),
+        ],
+        check=True,
+    )
+    _, transcript_offset = write_displayed_frame(path, tmp_path / "delayed.jpg", 3)
+    assert 2.95 < transcript_offset <= 3
+    label = audio_window(path, tmp_path, 3, 5, True)
+    assert (label["start"], label["end"]) == (1, 5)
+    with wave.open(str(tmp_path / "audio.wav"), "rb") as clip:
+        samples = np.frombuffer(clip.readframes(clip.getnframes()), dtype="<i2")
+    assert len(samples) == 4 * 16000
+    assert np.max(np.abs(samples[: int(1.8 * 16000)])) == 0
+    assert np.max(np.abs(samples[int(2.2 * 16000) :])) > 1000

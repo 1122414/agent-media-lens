@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  readdirSync,
   utimesSync,
   existsSync,
   symlinkSync,
@@ -113,18 +114,20 @@ it("distinguishes waiting, failed, and cancelled evidence reads without changing
 it("processes a real silent clip, reads evidence, guards active files and expires originals", async () => {
   const c = settings();
   let attempts = 0;
+  let publicStream: string | null = "fixture";
+  let mediaId = "123456789";
   const lens = new Lens(c, {
     resolve: async () => ({
       media: {
         platform: "douyin",
         downloadPermission: "allowed",
-        id: "123456789",
+        id: mediaId,
         sourceUrl: url,
         title: "Test clip",
         author: "Fixture",
         duration: 2,
       },
-      stream: "fixture",
+      stream: publicStream,
       provider: "test",
     }),
     download: async (_u, path) => {
@@ -174,6 +177,25 @@ it("processes a real silent clip, reads evidence, guards active files and expire
   expect(existsSync(lens.store.file(ephemeral.taskId, "source.mp4"))).toBe(
     false,
   );
+  const before = readdirSync(c.cacheDir).sort();
+  const moment = await lens.moment(ephemeral.taskId, 0.85, true);
+  expect(moment.label).toMatchObject({
+    frameTimestamp: 0.8,
+    source: "refetched",
+    speech: { activityAtTimestamp: "no_audio" },
+  });
+  expect(moment.audio).toBeUndefined();
+  mediaId = "999999999";
+  await expect(lens.moment(ephemeral.taskId, 1)).rejects.toMatchObject({
+    code: "MEDIA_CHANGED",
+  });
+  mediaId = "123456789";
+  publicStream = null;
+  await expect(lens.moment(ephemeral.taskId, 1)).rejects.toMatchObject({
+    code: "MEDIA_WITHHELD",
+  });
+  expect(readdirSync(c.cacheDir).sort()).toEqual(before);
+  expect(lens.result(ephemeral.taskId).retained).toBe(false);
   symlinkSync(
     join(c.cacheDir, "missing"),
     lens.store.file(taskId, "audio.wav"),
@@ -410,4 +432,22 @@ it("exports timestamped speech with the same display punctuation and preserves r
     "- [0.3–6.8s] " + JSON.stringify(displayed),
     "- [8.0–10.0s] " + JSON.stringify('看，他说"好"。'),
   ]);
+});
+
+it("recovers interrupted temporary moment reads without expiring parent evidence", () => {
+  const store = new Store(settings());
+  stores.push(store);
+  const parent = store.create();
+  store.stage(parent.taskId, "COMPLETED");
+  const temp = store.create("moment");
+  writeFileSync(
+    store.file(temp.taskId, ".playback.mp4"),
+    "private temporary media",
+  );
+  store.db
+    .prepare("UPDATE tasks SET pid=2147483647 WHERE id=?")
+    .run(temp.taskId);
+  store.cleanup();
+  expect(existsSync(store.dir(temp.taskId))).toBe(false);
+  expect(store.task(parent.taskId).status).toBe("COMPLETED");
 });

@@ -17,6 +17,7 @@ Share a supported public link; there is no required genre or creative brief. If 
 | Try asking the plugin | Output |
 |---|---|
 | “Analyze this work: [link].” | Evidence-cited analysis of editing, content, viewpoint and possible audience. No creative brief required. |
+| “What number is on screen at 32 seconds, and what does the speaker say?” | The agent retrieves the displayed frame, timed speech context and voice activity on demand, with an optional four-second audio excerpt. |
 | “Compare this creator’s high-like and ordinary posts. I want to make something similar.” | A scoped comparison plus two or three original directions, with material requirements and a first shot for each. |
 | “Use this as a reference for a 60-second software explainer; I only have screen recordings.” | A separate production plan: title, cover, two openings and a timed shot list with visuals, lines/audio, captions and edits. |
 

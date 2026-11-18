@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,80 @@ export const projectRoot = existsSync(
 export const appVersion: string = JSON.parse(
   readFileSync(join(projectRoot, "package.json"), "utf8"),
 ).version;
+function workerRuntime() {
+  const local = join(projectRoot, ".venv", "bin", "python");
+  const python =
+    process.env.MEDIA_LENS_PYTHON || (existsSync(local) ? local : "python3");
+  const env = { ...process.env };
+  delete env.EVIL0CTAL_API_KEY;
+  return { python, env };
+}
+const momentSchema = z.object({
+  duration: z.number().positive(),
+  timestamp: z.number(),
+  transcriptOffset: z.number(),
+  speech: z.object({
+    activityAtTimestamp: z.enum([
+      "detected",
+      "not_detected",
+      "no_audio",
+      "unavailable",
+    ]),
+    start: z.number().nonnegative().optional(),
+    end: z.number().nonnegative().optional(),
+    speechIntervals: z
+      .array(z.object({ start: z.number(), end: z.number() }))
+      .optional(),
+  }),
+});
+export async function decodeMoment(
+  dir: string,
+  second: number,
+  limit: number,
+  audio: boolean,
+  signal: AbortSignal,
+) {
+  const { python, env } = workerRuntime();
+  return new Promise<z.infer<typeof momentSchema>>((resolve, reject) => {
+    execFile(
+      python,
+      [
+        join(projectRoot, "workers", "moment.py"),
+        dir,
+        String(second),
+        String(limit),
+        ...(audio ? ["--audio"] : []),
+      ],
+      { env, signal, timeout: 90000, maxBuffer: 64000 },
+      (err, stdout) => {
+        try {
+          if (signal.aborted)
+            throw new LensError("CANCELLED", "精确取帧已取消");
+          const report = stdout.trim() ? JSON.parse(stdout) : {};
+          if (err) {
+            if (report.error === "NO_FRAME_AT_TIME")
+              throw new LensError(
+                "NO_FRAME_AT_TIME",
+                "此刻没有正在显示的视频帧",
+              );
+            if (
+              report.error === "DURATION_LIMIT" &&
+              Number.isFinite(report.seconds)
+            )
+              throw durationLimit(report.seconds, limit);
+            throw new LensError(
+              "MOMENT_DECODE_FAILED",
+              "精确解码失败，请检查媒体和本地解码环境",
+            );
+          }
+          resolve(momentSchema.parse(report));
+        } catch (e) {
+          reject(e);
+        }
+      },
+    );
+  });
+}
 export function worker(
   dir: string,
   c: Config,
@@ -32,11 +106,7 @@ export function worker(
   platform?: Media["platform"],
 ) {
   const script = join(projectRoot, "workers", "media_worker.py");
-  const local = join(projectRoot, ".venv", "bin", "python");
-  const python =
-    process.env.MEDIA_LENS_PYTHON || (existsSync(local) ? local : "python3");
-  const env = { ...process.env };
-  delete env.EVIL0CTAL_API_KEY;
+  const { python, env } = workerRuntime();
   env.MEDIA_LENS_ASR_HOTWORDS = c.asrHotwords;
   env.MEDIA_LENS_ASR_PROMPT = c.asrPrompt;
   return new Promise<z.infer<typeof workerSchema>>((ok, fail) => {

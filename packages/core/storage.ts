@@ -20,6 +20,7 @@ type Timing = { stage: Stage; startedAt: string; elapsedMs?: number };
 export interface Task {
   taskId: string;
   status: Stage;
+  purpose?: "moment";
   createdAt: string;
   completedAt?: string;
   stages: Timing[];
@@ -72,6 +73,10 @@ export class Store {
         alive((process.platform === "win32" ? 1 : -1) * Number(row.worker))
       )
         continue;
+      if (this.task(String(row.id)).purpose === "moment") {
+        this.removeMoment(String(row.id));
+        continue;
+      }
       this.clearAlbumInputs(String(row.id));
       rmSync(this.file(String(row.id), ".playback.mp4"), { force: true });
       rmSync(this.file(String(row.id), "playback.mp4"), { force: true });
@@ -178,7 +183,20 @@ export class Store {
         },
       );
   }
-  create() {
+  private removeMoment(id: string) {
+    rmSync(this.dir(id), { recursive: true, force: true });
+    this.db.prepare("DELETE FROM tasks WHERE id=?").run(id);
+  }
+  async withMoment<T>(read: (id: string) => Promise<T>) {
+    // Temporary reads share the normal cross-process admission and crash recovery.
+    const { taskId } = this.create("moment");
+    try {
+      return await read(taskId);
+    } finally {
+      this.transaction(() => this.removeMoment(taskId));
+    }
+  }
+  create(purpose?: "moment") {
     this.cleanup();
     return this.transaction(() => {
       const active = Number(
@@ -204,6 +222,7 @@ export class Store {
         createdAt = new Date().toISOString();
       const task: Task = {
         taskId: id,
+        ...(purpose && { purpose }),
         createdAt,
         status: "PENDING",
         stages: [{ stage: "PENDING", startedAt: createdAt }],

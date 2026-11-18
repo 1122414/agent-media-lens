@@ -7,4 +7,4 @@
 | Tutorial | Ordered actions and tools, relevant screenshot IDs, caveats |
 | Opinion | Claim, reasons, assumptions, observed facts and items needing verification |
 
-Cite speech as [12.3–15.1s]. Cite an image as [12s · f003]. Use only timestamps and frame IDs returned by this task.
+Cite speech as [12.3–15.1s]. Cite an image as [12s · f003]. For an on-demand frame from media_get_moment cite its displayed frameTimestamp (e.g. [32s · exact frame]). Use only timestamps and frame IDs returned by this task.
